@@ -112,6 +112,8 @@ async function hardReload() {
     const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
     await Promise.all(regs.map((r) => r.unregister()));
     if ('caches' in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+    // Refresh the browser's HTTP cache too (GitHub Pages serves pages with a 10-minute max-age).
+    await fetch(location.href, { cache: 'reload' });
   } catch { /* reload anyway */ }
   location.reload();
 }

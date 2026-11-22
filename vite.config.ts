@@ -59,7 +59,8 @@ self.addEventListener('fetch', (e) => {
       const cache = await caches.open(CACHE);
       try {
         const res = await Promise.race([
-          fetch(req),
+          // no-cache: revalidate with the server, so GitHub Pages' 10-minute max-age doesn't hide a new deploy.
+          fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
         ]);
         if (res.ok) return res;
