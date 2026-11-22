@@ -65,8 +65,9 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 | **chain** | 19–21 | two rings ~6.5 tiles above the takeoff, at 27% and 68% of the gap: swing rope to rope. From ~90 m |
 
 - **Everything you grapple moves** (`MOTION` in `src/endless.ts`): a smooth back-and-forth every 2.4–3.4 s from a
-  random starting point. Rings bob up and down ±1.2 tiles (60%) or slide side to side ±1.6. Beams slide side to side
-  ±2 (60%) or sink up to 1.6 tiles below their usual height and come back (never higher, so they stay on screen).
+  random starting point. Rings bob up and down ±2 tiles (60%) or slide side to side ±2.8. Beams slide up to 7 tiles
+  forward of their usual spot (60%) or sink up to 2.2 tiles below their usual height, and come back. They never go further
+  back or higher: a beam drifting back toward the takeoff made the widest gaps unbeatable, and higher would leave the screen.
   Motion starts at 60% of that size and reaches full size at full difficulty. A faint dotted line shows each one's path.
   A rope that catches follows its anchor; you can ride on top of a beam, and a beam moving into you shoves you aside.
   Once the grapple locks on, the hook homes in on that spot as it flies, so a moving target can't dodge a locked shot.
@@ -80,7 +81,7 @@ and top speed, and measures the timing window (frames where some jump / double j
 Beams are checked at their narrowest and widest. Every variant is beatable; the tightest is 30 frames (~0.5 s, an
 11-tile double-jump gap at top speed). Still rings 36+ frames and beams 52+ at top speed. `checkMoving()` checks rings,
 beams and chains at full motion from 8 starting points in their motion (both directions) and reports the worst: at top
-speed rings 31+, beams 28+, chains 23+ frames (base speed: 35+, 52+, 86+). Chains are checked
+speed rings 30+, beams 18+ (a narrow sinking beam), chains 19+ frames (base speed: 30+, 35+, 82+). Chains are checked
 with two-swing inputs only, and take about 30 s. At base speed a great single swing can sometimes (~5% of tries) skip a chain ring. In the dev page's console:
 `(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5, move: 1, phase: 0 })`.
 The full moving sweep is too slow for the browser console; bundle the checker with esbuild and run it in Node.

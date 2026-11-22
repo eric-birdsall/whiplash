@@ -43,16 +43,16 @@ export const OBSTACLES = {
 
 /**
  * How rings and beams move (full size; scaled by MOVE_MIN..1 with difficulty). Each one picks a direction:
- * rings bob up and down or slide side to side around their home; beams slide side to side, or sink
- * below their usual height and come back (never higher, so they stay on screen).
+ * rings bob up and down or slide side to side around their home; beams slide forward from their usual
+ * spot, or sink below their usual height, and come back (never further back or higher).
  */
 export const MOTION = {
   period: [2.4, 3.4], // seconds per full back-and-forth
-  ringBob: 1.2, // ± tiles up/down
-  ringSlide: 1.6, // ± tiles side to side
+  ringBob: 2, // ± tiles up/down
+  ringSlide: 2.8, // ± tiles side to side
   ringBobChance: 0.6,
-  beamSlide: 2, // ± tiles side to side
-  beamSink: 1.6, // sinks this far below its usual height at the bottom of its travel
+  beamSlide: 7, // slides forward this far from its usual spot and back
+  beamSink: 2.2, // sinks this far below its usual height at the bottom of its travel
   beamSlideChance: 0.6,
 };
 const MOVE_MIN = 0.6;
@@ -155,11 +155,13 @@ export class EndlessGen {
       // Skewed toward narrow as difficulty rises.
       const len = params?.beamLen ?? lo + Math.floor(Math.pow(this.rand(), 1 + 2 * d) * (hi - lo + 1));
       while (cols.length < from + len) cols.push(this.slab(takeoffGy - rise));
-      // Sinking beams sit half their travel lower and swing ±half: the top of the travel is the usual height.
+      // Each beam's travel starts at its usual spot and only goes forward (sliding) or down (sinking), so
+      // it never ends up further back or higher: the home sits half the travel along and swings ±half.
       const slide = !vertical(1 - MOTION.beamSlideChance);
-      const m = slide ? motion(MOTION.beamSlide, 0) : motion(0, MOTION.beamSink / 2);
-      const y = row + (m ? m.ay : 0);
-      beams.push({ x: from, y, w: len, h: 1, bx: from, by: y, m, dx: 0, dy: 0 });
+      const m = slide ? motion(MOTION.beamSlide / 2, 0) : motion(0, MOTION.beamSink / 2);
+      const x = from + (m ? m.ax : 0), y = row + (m ? m.ay : 0);
+      while (cols.length < Math.ceil(x + (m ? m.ax : 0)) + len) cols.push(this.slab(takeoffGy - rise));
+      beams.push({ x, y, w: len, h: 1, bx: x, by: y, m, dx: 0, dy: 0 });
     }
     this.gy -= rise;
     if (kind === 'ring') ring(startX + gap * 0.45, takeoffGy - (o.ringAbove ?? 5) + 0.5); // x relative to chunk start
