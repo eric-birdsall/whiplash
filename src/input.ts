@@ -80,9 +80,16 @@ export class Input {
     return { jump: this.jumpPointers.size > 0, hook: this.hookPointer !== null };
   }
 
-  clearEdges() {
-    this.state.hookPressed = false;
-    this.state.jumpPressed = false;
+  /**
+   * Call at the end of each rendered frame. Jump/grapple presses are kept until a physics step has
+   * used them (consumed = true): on high-refresh screens many frames run no physics step, and clearing
+   * them anyway would drop presses.
+   */
+  clearEdges(consumed = true) {
+    if (consumed) {
+      this.state.hookPressed = false;
+      this.state.jumpPressed = false;
+    }
     this.state.restart = false;
     this.state.pause = false;
   }

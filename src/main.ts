@@ -31,6 +31,7 @@ const screens: Record<'title' | 'pause' | 'over', HTMLElement> = { title: $('tit
 
 function show(s: Screen) {
   screen = s;
+  (document.activeElement as HTMLElement | null)?.blur?.(); // Space must never click a menu button mid-run
   for (const [k, el] of Object.entries(screens)) el.classList.toggle('hidden', k !== s);
   $('pause-btn').classList.toggle('hidden', s !== 'play');
   input.releaseAll();
@@ -105,6 +106,8 @@ canvas.addEventListener('pointerdown', () => checkOrientation());
 
 let last = performance.now();
 let acc = 0;
+/** Did this frame run at least one physics step (and so consume the presses)? */
+let stepped = true;
 
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -120,7 +123,9 @@ function frame(now: number) {
       acc += dt;
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
+      stepped = false;
       while (acc >= C.STEP) {
+        stepped = true;
         run.tick();
         game.update(C.STEP, st.hookDown, pressed, jump);
         pressed = jump = false;
@@ -144,7 +149,7 @@ function frame(now: number) {
     touch: input.touchMode && (screen === 'play' || screen === 'dying'),
     zones: input.heldZones(),
   });
-  input.clearEdges();
+  input.clearEdges(stepped || screen !== 'play');
   requestAnimationFrame(frame);
 }
 
