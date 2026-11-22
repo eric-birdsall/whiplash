@@ -14,7 +14,7 @@ grapple at 45° to swing across gaps between floating platforms. One life: go as
 | Physics | Custom: tile-grid AABB collision + rope distance constraint, fixed 60 Hz step |
 | Audio | Synthesized with Web Audio (no files). SFX only, mute toggle. No music |
 | World | Generated on the fly in `src/endless.ts`; the tile grid grows to the right as you run |
-| Save | `localStorage` `whiplash.endless.best` (best distance) |
+| Save | `localStorage` `whiplash.endless.best` (best score: distance + chain bonus metres) |
 | Hosting | GitHub Pages via Actions workflow; Vite `base: './'`; installable PWA with offline play |
 
 ## Controls
@@ -40,6 +40,13 @@ at the bottom corners. Portrait shows a "rotate your device" notice.
     ready; an airborne tap with nothing in reach waits (within that time) for a target. Misses snap back
     fast (160 tiles/s, 0.06 s cooldown).
   - A dotted guide line shows where the next grapple will go and rings the target when it's locked.
+- **Perfect release:** let go just past the bottom of the swing (rope 0–28° ahead of straight down) for a
+  harder fling (+3 forward, +4.5 up), a gold flash and a chime. The rope turns gold while you're in the window
+  (about 0.15 s). Releases that early can still fall short on the hardest beams: it's a bonus, not a guarantee.
+- **Landing burst:** landing after a swing raises run speed by 4.5 tiles/s, fading out over 0.8 s.
+- **Swing chains:** every rope catch and every perfect release since you last touched the ground is a link
+  (×2, ×3… pops up from the second link). Landing with 2+ links grows the landing burst (+30% per extra
+  link, up to ×2) and adds 5 bonus metres per extra link to the score. A single catch + perfect release is ×2.
 - **Fail:** falling off the bottom, or being pinned against a wall for 0.45 s, ends the run (no softlocks).
 
 ## The course
@@ -53,6 +60,7 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 | **jump** | 2–4 | |
 | **double** | 6–8 | |
 | **step** | 0 | a 1–3 tile ledge to hop up (3 needs the double jump) |
+| **chain** | 19–21 | two rings ~5 tiles above the takeoff, at 27% and 68% of the gap: swing rope to rope. From ~90 m |
 
 - Gaps scale with speed; ledges move up to 1 up or 3 down.
 - The first gap is always a beam (~25 m in). Beams are the most common obstacle; rings appear from ~45 m.
@@ -61,7 +69,8 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 
 **Checker (dev only):** `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
 and top speed, and measures the timing window (frames where some jump / double jump / grapple clears it).
-Every variant is beatable; the tightest is 23 frames (~0.38 s, a 13-tile beam at top speed). In the dev page's console:
+Every variant is beatable; the tightest is 23 frames (~0.38 s, a 19-tile chain at top speed). Chains are checked
+with two-swing inputs only, and take about 30 s. At base speed a great single swing can sometimes skip a chain ring. In the dev page's console:
 `(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5 })`.
 `window.__whiplash` (dev builds only) exposes the current run for debugging.
 

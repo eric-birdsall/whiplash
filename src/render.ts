@@ -17,6 +17,7 @@ const COL = {
   stoneLine: '#222836',
   ring: '#7df0ff',
   rope: '#f4e9d0',
+  perfect: '#ffe36b',
   text: '#eef3ff',
 };
 
@@ -100,6 +101,7 @@ export class Renderer {
     this.drawParticles(g);
     ctx.restore();
 
+    this.drawPopups(g);
     this.drawHud(g);
     if (opts.touch) this.drawZones(opts.zones);
   }
@@ -287,7 +289,8 @@ export class Renderer {
     const a = Math.atan2(tip.y - c.y, tip.x - c.x);
     const ex = tip.x - Math.cos(a) * CLAW_BACK * CLAW_SCALE, ey = tip.y - Math.sin(a) * CLAW_BACK * CLAW_SCALE;
     const taut = k === 'anchored';
-    ctx.strokeStyle = COL.rope;
+    // Gold rope = let go now for a perfect release.
+    ctx.strokeStyle = taut && g.isPerfect() ? COL.perfect : COL.rope;
     ctx.lineWidth = taut ? 0.06 : 0.045;
     ctx.beginPath();
     ctx.moveTo(c.x, c.y);
@@ -317,6 +320,30 @@ export class Renderer {
       ctx.fillRect(pt.x - pt.size / 2, pt.y - pt.size / 2, pt.size, pt.size);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** "PERFECT", "×2", "+10 m": world-anchored text, drawn in screen space so it stays crisp. */
+  private drawPopups(g: Game) {
+    const { ctx } = this;
+    const s = this.dpr;
+    const fs = Math.max(14, Math.min(22, (this.canvas.height / s) * 0.032)) * s;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    for (const u of g.popups) {
+      const t = u.life / u.max;
+      const x = this.ox + (u.x - this.camX) * this.ppt, y = this.oy + (u.y - this.camY) * this.ppt;
+      const pop = 1 + 0.35 * Math.max(0, (t - 0.85) / 0.15); // quick pop on appearing
+      ctx.font = `900 ${(u.big ? 1.6 : 1.15) * fs * pop}px system-ui, -apple-system, sans-serif`;
+      ctx.globalAlpha = Math.min(1, t * 2.5);
+      ctx.lineWidth = fs * 0.22;
+      ctx.strokeStyle = 'rgba(5,7,12,0.8)';
+      ctx.strokeText(u.text, x, y);
+      ctx.fillStyle = u.color;
+      ctx.fillText(u.text, x, y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
   }
 
   private drawHud(g: Game) {

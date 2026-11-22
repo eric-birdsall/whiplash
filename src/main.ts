@@ -46,7 +46,7 @@ function startRun() {
 }
 
 function onRunOver() {
-  const d = run.distance;
+  const d = run.score;
   const best = run.finish();
   $('over-stats').textContent = best ? `${d} m   — new best!` : `${d} m   (best ${run.best} m)`;
   show('over');

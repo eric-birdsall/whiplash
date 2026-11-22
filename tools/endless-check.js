@@ -41,6 +41,15 @@ function actions() {
 }
 const ACTIONS = actions();
 
+// Two swings: hold h1, let go for r frames, hold h2 (the second press waits for a lock, as in play).
+function chainActions() {
+  const a = [];
+  for (let h1 = 12; h1 <= 72; h1 += 4) for (let r = 0; r <= 24; r += 6) for (let h2 = 18; h2 <= 78; h2 += 6)
+    a.push(['grapple×2', [[h1, true, false], [r, false, false], [h2, true, false]]]);
+  return a;
+}
+const CHAIN_ACTIONS = chainActions();
+
 function play(g, segs) {
   for (const [n, hold, jump] of segs)
     for (let i = 0; i < n; i++) {
@@ -73,7 +82,7 @@ export function window(kind, opts) {
     if (!play(g0, [[w, false, false]])) break;
     if (g0.player.x > s.gapStart + 1 && g0.player.grounded === false && g0.player.y > 20) break;
     if (g0.player.x > s.gapEnd) break;
-    for (const [name, segs] of ACTIONS) {
+    for (const [name, segs] of kind === 'chain' ? CHAIN_ACTIONS : ACTIONS) {
       if (name.includes('grapple') && !segs.some(() => true)) continue;
       const g = s.mk();
       play(g, [[w, false, false]]);

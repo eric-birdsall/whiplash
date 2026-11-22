@@ -25,7 +25,7 @@ function rng(seed: number) {
   };
 }
 
-export type ObstacleKind = 'jump' | 'double' | 'step' | 'beam' | 'ring';
+export type ObstacleKind = 'jump' | 'double' | 'step' | 'beam' | 'ring' | 'chain';
 
 /** Tunable ranges per obstacle, in tiles at base speed (gaps scale with speed). Checked by tools/endless-check.js. */
 export const OBSTACLES = {
@@ -35,6 +35,8 @@ export const OBSTACLES = {
   // Beam and ring gaps are wider than a double jump reaches, so they need the grapple.
   beam: { gap: [11, 13], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
   ring: { gap: [11, 12], rise: [-2, 0], ringAbove: 5 },
+  // Two rings over one long gap: swing rope to rope (a built-in swing chain).
+  chain: { gap: [19, 21], rise: [-2, 0], ringAbove: 5, ring2At: 0.68 },
 };
 
 export class EndlessGen {
@@ -69,6 +71,7 @@ export class EndlessGen {
       ['jump', 1.5],
       ['double', d < 0.03 ? 0 : 1.5],
       ['step', 0.6],
+      ['chain', d < 0.06 ? 0 : 1 + d],
     ];
     const total = w.reduce((s, [, n]) => s + n, 0);
     let r = this.rand() * total;
@@ -92,7 +95,7 @@ export class EndlessGen {
       const ng = Math.min(this.maxGy, Math.max(this.minGy, this.gy - rise));
       return this.gy - ng;
     };
-    const o = OBSTACLES[kind] as { gap?: number[]; rise: number[]; beamAbove?: number; beamLen?: number; ringAbove?: number };
+    const o = OBSTACLES[kind] as { gap?: number[]; rise: number[]; beamAbove?: number; beamLen?: number; ringAbove?: number; ring2At?: number };
     const rise = clampRise(params?.rise ?? this.ri(o.rise[0], o.rise[1]));
     const gapBase = params?.gap ?? (o.gap ? o.gap[0] + this.rand() * (o.gap[1] - o.gap[0]) : 0);
     // Going up shortens what you can clear; going down lengthens it a little.
@@ -113,6 +116,10 @@ export class EndlessGen {
     }
     this.gy -= rise;
     if (kind === 'ring') rings.push({ x: startX + gap * 0.45, y: takeoffGy - (o.ringAbove ?? 5) + 0.5 }); // x relative to chunk start
+    if (kind === 'chain') {
+      const ry = takeoffGy - (o.ringAbove ?? 5) + 0.5;
+      rings.push({ x: startX + gap * 0.27, y: ry }, { x: startX + gap * (o.ring2At ?? 0.68), y: ry });
+    }
     return { cols, rings, kind, gap, rise };
   }
 }
@@ -146,6 +153,9 @@ export class EndlessRun {
 
   get distance() { return Math.max(0, Math.floor(this.game.center().x - this.startX)); }
 
+  /** Distance plus chain bonus metres: what the HUD shows and the best records. */
+  get score() { return this.distance + this.game.bonus; }
+
   /** Difficulty 0..1 by distance. */
   get difficulty() { return Math.min(1, this.distance / 1500); }
 
@@ -154,8 +164,8 @@ export class EndlessRun {
     const g = this.game;
     g.runSpeed = C.RUN_SPEED + C.RUN_SPEED_GAIN * Math.min(1, this.distance / 1600);
     this.ensure();
-    g.hudTitle = `${this.distance} m`;
-    g.hudStats = `best ${Math.max(this.best, this.distance)} m`;
+    g.hudTitle = `${this.score} m`;
+    g.hudStats = `best ${Math.max(this.best, this.score)} m`;
   }
 
   private ensure() {
@@ -172,9 +182,9 @@ export class EndlessRun {
     }
   }
 
-  /** Save the best distance; returns true if this run set a new best. */
+  /** Save the best score; returns true if this run set a new best. */
   finish(): boolean {
-    const d = this.distance;
+    const d = this.score;
     if (d > this.best) { this.best = d; localStorage.setItem(BEST_KEY, String(d)); return true; }
     return false;
   }

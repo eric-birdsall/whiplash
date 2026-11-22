@@ -23,7 +23,10 @@ export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; grav: number;
 }
 
-export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump';
+export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain';
+
+/** Floating text in world space ("PERFECT", "×2", "+10 m"). */
+export interface Popup { text: string; x: number; y: number; life: number; max: number; color: string; big: boolean }
 
 /** What a hook ray hits first: something to hang from ('wood' underside or 'ring'), or a 'solid' it bounces off. */
 export type HookHit = { t: number; what: 'wood' | 'ring' | 'solid'; rx?: number; ry?: number };
@@ -47,6 +50,7 @@ export class Game implements Grid {
   hudTitle = '';
   hudStats = '';
   particles: Particle[] = [];
+  popups: Popup[] = [];
   time = 0;
   /** Why the run ended (for tools). */
   lastDeath: { reason: string; x: number; y: number } | null = null;
@@ -60,6 +64,12 @@ export class Game implements Grid {
   private swung = false;
   /** Extra run speed from landing a swing; fades to 0 over LAND_BOOST_TIME. */
   landBoost = 0;
+  /** Chain links since last touching the ground: rope catches plus perfect releases. */
+  links = 0;
+  /** Bonus metres earned from chains (added to the score). */
+  bonus = 0;
+  /** Perfect releases this run (for tools and stats). */
+  perfects = 0;
 
   constructor(public level: Level, private sfx: (s: Sfx) => void = () => {}) {
     this.w = level.w;
@@ -219,10 +229,11 @@ export class Game implements Grid {
         this.hook = { kind: 'anchored', x: ax, y: ay, len, ring };
         this.burst(ax, ay, 6, ring ? '#7df0ff' : '#e0a464', 4, 6);
         this.sfx('attach');
+        this.addLink(null);
         return;
       }
       case 'anchored': {
-        if (!hookDown) { this.hook = { kind: 'idle' }; this.cooldown = C.HOOK_COOLDOWN * 0.5; return; }
+        if (!hookDown) { this.release(h); return; }
         const dist = Math.hypot(c.x - h.x, c.y - h.y);
         h.len = Math.max(C.ROPE_MIN, Math.min(h.len, dist) - C.REEL_SPEED * dt);
         return;
@@ -240,6 +251,43 @@ export class Game implements Grid {
         return;
       }
     }
+  }
+
+  /** Let go of the rope. Just past the bottom of the swing is a perfect release: a harder fling. */
+  private release(h: { x: number; y: number }) {
+    const p = this.player;
+    this.hook = { kind: 'idle' };
+    this.cooldown = C.HOOK_COOLDOWN * 0.5;
+    if (this.isPerfect(h)) {
+      p.vx += C.PERFECT_FLING_X;
+      p.vy -= C.PERFECT_FLING_Y;
+      this.perfects++;
+      const c = this.center();
+      this.burst(c.x, c.y, 14, '#ffe36b', 6, 4);
+      this.sfx('perfect');
+      this.addLink('PERFECT');
+    }
+  }
+
+  /** Would letting go now be a perfect release? (Also used to light up the hero.) */
+  isPerfect(h: { x: number; y: number } | null = this.hook.kind === 'anchored' ? this.hook : null): boolean {
+    const p = this.player;
+    if (!h || p.grounded || p.vx <= 0) return false;
+    const c = this.center();
+    const a = Math.atan2(c.x - h.x, c.y - h.y); // 0 = straight below the anchor, + = ahead of it
+    return a >= C.PERFECT_MIN && a <= C.PERFECT_MAX;
+  }
+
+  /** One more chain link; shows the count from ×2 up. */
+  private addLink(label: string | null) {
+    this.links++;
+    const c = this.center();
+    const text = this.links >= 2 ? (label ? `${label} ×${this.links}` : `×${this.links}`) : label;
+    if (text) this.popup(text, c.x, c.y - 1.4, label ? '#ffe36b' : '#7df0ff', false);
+  }
+
+  private popup(text: string, x: number, y: number, color: string, big: boolean) {
+    this.popups.push({ text, x, y, life: 1, max: 1, color, big });
   }
 
   /** What the hook would hit first along a ray (also used for the aim preview). */
@@ -338,11 +386,19 @@ export class Game implements Grid {
     if (p.grounded && p.vy > 0) p.vy = 0;
     if (p.grounded && !wasGrounded && this.swung) {
       // Landing out of a swing: a short speed burst, at least as fast as the boosted run speed.
-      this.landBoost = C.LAND_BOOST;
+      // A chain (2+ links) grows the burst and cashes in as bonus distance.
+      const extra = Math.max(0, this.links - 1);
+      this.landBoost = C.LAND_BOOST * Math.min(C.CHAIN_BOOST_MAX, 1 + C.CHAIN_BOOST_PER_LINK * extra);
       p.vx = Math.max(p.vx, this.runSpeed + this.landBoost);
-      this.burst(p.x, p.y + p.h, 8, '#7df0ff', 3, 6);
+      this.burst(p.x, p.y + p.h, 8 + extra * 6, '#7df0ff', 3 + extra, 6);
+      if (extra > 0) {
+        const m = C.CHAIN_BONUS_PER_LINK * extra;
+        this.bonus += m;
+        this.popup(`+${m} m`, p.x + p.w / 2, p.y - 1, '#ffe36b', true);
+        this.sfx('chain');
+      }
     }
-    if (p.grounded) this.swung = false;
+    if (p.grounded && !anchored) { this.swung = false; this.links = 0; }
   }
 
   /** Pinned against a wall you can't get past → the run ends (no softlocks). */
@@ -366,6 +422,8 @@ export class Game implements Grid {
       pt.y += pt.vy * dt;
     }
     this.particles = this.particles.filter((pt) => pt.life > 0);
+    for (const u of this.popups) { u.life -= dt; u.y -= 1.2 * dt; }
+    this.popups = this.popups.filter((u) => u.life > 0);
   }
 
   /** Where the rope's far end is, for drawing. */

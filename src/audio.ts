@@ -66,6 +66,8 @@ export class Audio {
       case 'miss': this.tone('sine', 500, 250, 0.1, 0.05); break;
       case 'death': this.noise(0.35, 0.4, 500, 0.7); this.tone('sawtooth', 300, 60, 0.35, 0.1); break;
       case 'jump': this.noise(0.06, 0.18, 1400, 1.2); this.tone('triangle', 260, 520, 0.09, 0.07); break;
+      case 'perfect': this.tone('triangle', 880, 1320, 0.12, 0.1); this.tone('sine', 1760, 1760, 0.22, 0.05, 0.05); break;
+      case 'chain': [660, 880, 1100].forEach((f, i) => this.tone('triangle', f, f, 0.12, 0.08, i * 0.06)); break;
     }
   }
 }

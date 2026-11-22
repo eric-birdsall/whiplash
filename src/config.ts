@@ -47,3 +47,16 @@ export const PIN_KILL = 0.45; // pinned against a wall this long ends the run (n
 // Landing after a swing gives a short speed burst: the run speed target rises by this much and fades out.
 export const LAND_BOOST = 4.5;
 export const LAND_BOOST_TIME = 0.8;
+
+// Perfect release: letting go just past the bottom of the swing (rope angle from straight down, forward
+// positive) flings you harder. Each perfect release also counts as a chain link.
+export const PERFECT_MIN = 0;
+export const PERFECT_MAX = (28 * Math.PI) / 180;
+export const PERFECT_FLING_X = 3;
+export const PERFECT_FLING_Y = 4.5;
+
+// Swing chains: every catch and every perfect release since last touching the ground is a link.
+// Landing with 2+ links grows the landing burst and adds bonus distance.
+export const CHAIN_BOOST_PER_LINK = 0.3; // landing burst × (1 + this × (links − 1)), capped below
+export const CHAIN_BOOST_MAX = 2;
+export const CHAIN_BONUS_PER_LINK = 5; // bonus metres per link beyond the first
