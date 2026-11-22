@@ -17,12 +17,12 @@ const save = loadSave();
 
 let screen: Screen = 'title';
 let levelIndex = 0;
-let game = makeGame(0);
-let mouseSeen = false;
-
 // Runner mode (default): always run right, tap to jump. Classic: move freely, no jump.
 const MODE_KEY = 'whiplash.mode';
 let runner = localStorage.getItem(MODE_KEY) !== 'classic';
+let game = makeGame(0);
+let mouseSeen = false;
+
 function applyMode() {
   input.runner = runner;
   document.body.classList.toggle('runner', runner);
@@ -35,6 +35,7 @@ canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') m
 
 function makeGame(i: number): Game {
   const g = new Game(parseLevel(LEVELS[i]), (s) => audio.play(s));
+  g.ceilingOnly = runner;
   renderer.resize();
   renderer.snapCamera(g);
   return g;
@@ -87,7 +88,7 @@ document.addEventListener('click', (e) => {
     case 'title': show('title'); break;
     case 'resume': show('play'); break;
     case 'restart-level': startLevel(levelIndex); break;
-    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); break;
+    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); game.ceilingOnly = runner; break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
     case 'next': startLevel(Math.min(levelIndex + 1, LEVELS.length - 1)); break;
     case 'replay': startLevel(levelIndex); break;

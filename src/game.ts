@@ -67,6 +67,8 @@ export class Game implements Grid {
   player: Player;
   hook: Hook = { kind: 'idle' };
   cooldown = 0;
+  /** Runner mode: wood only catches the hook on its underside (a ceiling), not ledge tops or walls. */
+  ceilingOnly = false;
   private jumpBuffer = 0;
   private coyote = 0;
   crates: Crate[];
@@ -363,7 +365,10 @@ export class Game implements Grid {
     const consider = (h: Hit) => { if (!best || h.t < best.t) best = h; };
 
     const g = raycastGrid(ox, oy, dx, dy, maxT, this);
-    if (g) consider({ t: g.t, what: g.material === MAT_WOOD ? 'wood' : 'metal' });
+    if (g) {
+      const grips = g.material === MAT_WOOD && (!this.ceilingOnly || g.ny > 0);
+      consider({ t: g.t, what: grips ? 'wood' : 'metal' });
+    }
 
     for (const r of this.level.rings) {
       const t = rayCircle(ox, oy, dx, dy, maxT, r.x, r.y, C.RING_RADIUS + 0.12);

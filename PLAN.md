@@ -28,6 +28,11 @@ Toggle on the title and pause screens (saved in `localStorage` as `whiplash.mode
 
 Keys are collected by hooking them *or* by touching them (e.g. jumping through a floating key).
 
+**Ceiling-only grapple (Runner):** wood only catches the hook on its *underside*: you grapple ceilings,
+not ledge tops or walls (those clank off like metal). Rings work from any angle; keys, crates and levers
+still get pulled. Runner levels therefore need wood ceilings (or rings) wherever a climb is higher than a jump.
+Classic mode still grips any wood face.
+
 ## Controls
 
 **Runner, desktop:** Space / W / ↑ jump · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
