@@ -153,7 +153,7 @@ export function chain(lvl, prefixSteps, targets, land) {
 // ---------- Runner mode (auto-run right, jump, ceiling-only, fixed 45° auto-aim) ----------
 // Segments: [frames, hookHeld, _, jumpOnFirstFrame?]. moveX is always 1, aim is always game.assistAim().
 
-export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; g.hookRange = 11; g.wallKills = true; return g; };
+export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; g.hookRange = 11; g.wallKills = true; g.autoAim = true; return g; };
 
 export function repR(lvl, segs) {
   const g = mkR(lvl);
@@ -238,7 +238,7 @@ function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>>
  * locked, holds a random time, jumps at random. Deaths respawn at checkpoints as in the game.
  * Reports deaths per 2-tile bin with reasons, softlocks (alive, no progress for 6 s), and completions.
  */
-export function auditR(lvl, { runs = 40, seconds = 90, seed = 1, fire = 0.05, jump = 0.02 } = {}) {
+export function auditR(lvl, { runs = 40, seconds = 90, seed = 1, fire = 0.05, jump = 0.02, tapAny = false } = {}) {
   const deaths = {}, softlocks = {};
   let completions = 0;
   const times = [];
@@ -250,7 +250,8 @@ export function auditR(lvl, { runs = 40, seconds = 90, seed = 1, fire = 0.05, ju
       const aim = g.assistAim();
       let pressed = false, jp = false;
       if (hold > 0) hold--;
-      else if (g.hook.kind === 'idle' && aim.locked && rand() < fire) { hold = 6 + Math.floor(rand() * 90); pressed = true; }
+      // tapAny: a human-like masher that taps whenever, locked or not, hook ready or not.
+      else if ((tapAny || (g.hook.kind === 'idle' && aim.locked)) && rand() < fire) { hold = 6 + Math.floor(rand() * 90); pressed = true; }
       if (g.player.grounded && rand() < jump) jp = true;
       g.update(DT, 1, hold > 0, pressed, aim, jp);
       if (g.deaths !== lastDeaths) {

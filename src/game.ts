@@ -73,6 +73,9 @@ export class Game implements Grid {
   hookRange = C.HOOK_RANGE;
   /** Runner mode: being pinned against a wall (or a stuck crate / locked door / closed gate) is a fail. */
   wallKills = false;
+  /** Runner mode: aim is the fixed 45° assisted shot; airborne taps wait for a lock. */
+  autoAim = false;
+  private hookBuffer = 0;
   private blockedX = false;
   private pinned = 0;
   private jumpBuffer = 0;
@@ -173,6 +176,7 @@ export class Game implements Grid {
     this.hook = { kind: 'idle' };
     this.jumpBuffer = this.coyote = 0;
     this.pinned = 0;
+    this.hookBuffer = 0;
   }
 
   restart() {
@@ -244,7 +248,21 @@ export class Game implements Grid {
     }
 
     this.cooldown = Math.max(0, this.cooldown - dt);
-    if (hookPressed && this.hook.kind === 'idle' && this.cooldown <= 0) this.fire(aim);
+    // Forgiving grapple: remember a tap while it's held, fire once the hook is ready (and, in Runner
+    // while airborne, once something is locked so the shot isn't wasted on empty air).
+    if (hookPressed) this.hookBuffer = C.HOOK_BUFFER;
+    else this.hookBuffer = hookDown ? Math.max(0, this.hookBuffer - dt) : 0;
+    if (this.hookBuffer > 0 && this.hook.kind === 'idle' && this.cooldown <= 0) {
+      let shot = aim;
+      let go = true;
+      if (this.autoAim) {
+        const a = this.assistAim();
+        shot = a;
+        // Airborne with nothing in reach: keep waiting, unless the tap is about to expire.
+        if (!this.player.grounded && !a.locked && this.hookBuffer > dt * 1.5) go = false;
+      }
+      if (go) { this.fire(shot); this.hookBuffer = 0; }
+    }
     this.updateHook(dt, hookDown);
     this.tryJump(dt, jumpPressed);
     this.blockedX = false;

@@ -39,6 +39,11 @@ Keys can also be placed in a swing's path and collected by touch.
 a locked door, a closed gate) for 0.45 s is a fail, with the same quick checkpoint respawn as a pit.
 Hanging on the rope or pulling something pauses that clock but doesn't reset it.
 
+**Forgiving grapple:** a tap is remembered for 0.25 s while held and fires the moment the hook is
+ready (so taps during the short post-release cooldown aren't lost). In Runner, an airborne tap with
+nothing locked waits within that time for a target instead of firing at empty air. Missed shots snap
+back fast (return speed 160, cooldown 0.06 s).
+
 **Aim-assist priority:** within the ±14° cone, rings, keys, levers and crates win over plain wood.
 
 **Runner level rules (checked by tools):**

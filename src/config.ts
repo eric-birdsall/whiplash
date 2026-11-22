@@ -22,8 +22,11 @@ export const HOOK_RANGE = 9;
 export const RUNNER_HOOK_RANGE = 11;
 export const AUTO_AIM_ANGLE = Math.PI / 4;
 export const AIM_ASSIST = (14 * Math.PI) / 180; // max bend either side of 45°
-export const HOOK_RETURN_SPEED = 70;
-export const HOOK_COOLDOWN = 0.15;
+export const HOOK_RETURN_SPEED = 160; // a missed shot snaps back fast
+export const HOOK_COOLDOWN = 0.06;
+// A tap is remembered this long (while still held) and fires as soon as the hook is ready.
+// In Runner, an airborne tap also waits (within this time) for something to lock onto instead of firing at air.
+export const HOOK_BUFFER = 0.25;
 
 export const REEL_SPEED = 5.5;
 export const ROPE_MIN = 1.1;

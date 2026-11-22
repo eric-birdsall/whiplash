@@ -28,6 +28,7 @@ function applyRules(g: Game) {
   g.ceilingOnly = runner;
   g.hookRange = runner ? C.RUNNER_HOOK_RANGE : C.HOOK_RANGE;
   g.wallKills = runner;
+  g.autoAim = runner;
 }
 
 function applyMode() {
