@@ -23,7 +23,7 @@ grapple at 45° to swing across gaps between floating platforms. One life: go as
 jump) · tap the **right half** to grapple, hold to swing, release to fling. Faint JUMP / HOOK labels sit
 at the bottom corners. Portrait shows a "rotate your device" notice.
 
-**Desktop:** Space / W / ↑ jump · click (anywhere), Shift, K or J to grapple, hold to swing · R restart · Esc pause.
+**Desktop:** W jump · E or click (anywhere) to grapple, hold to swing · R restart · Esc pause.
 
 ## Moves
 

@@ -1,5 +1,5 @@
 // Keyboard, mouse and touch, folded into one small InputState the game reads.
-// Touch: left half of the screen jumps, right half grapples. Desktop: Space/W/↑ jump; click, Shift, K or J grapple.
+// Touch: left half of the screen jumps, right half grapples. Desktop: W jumps; E or a click grapples.
 
 export interface InputState {
   hookDown: boolean; // held
@@ -9,8 +9,8 @@ export interface InputState {
   pause: boolean;
 }
 
-const HOOK_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyK', 'KeyJ'];
-const JUMP_KEYS = ['Space', 'KeyW', 'ArrowUp'];
+const HOOK_KEYS = ['KeyE'];
+const JUMP_KEYS = ['KeyW'];
 
 export class Input {
   state: InputState = { hookDown: false, hookPressed: false, jumpPressed: false, restart: false, pause: false };
