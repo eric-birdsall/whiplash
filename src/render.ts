@@ -13,6 +13,9 @@ const COL = {
   wood: '#8a5a34',
   woodTop: '#c98a52',
   woodLine: '#6e4527',
+  stone: '#2c3342',
+  stoneTop: '#4a5468',
+  stoneLine: '#222836',
   metal: '#566273',
   metalTop: '#8b97a8',
   metalDark: '#3e4856',
@@ -196,6 +199,10 @@ export class Renderer {
           ctx.moveTo(tx + 0.75 - off * 0.5, ty + 0.5); ctx.lineTo(tx + 0.75 - off * 0.5, ty + 1);
           ctx.stroke();
           if (open) { ctx.fillStyle = COL.woodTop; ctx.fillRect(tx, ty, 1.01, 0.14); }
+          // The grab surface: a bright lip along the underside.
+          if (!g.solid(tx, ty + 1)) { ctx.fillStyle = COL.woodTop; ctx.fillRect(tx, ty + 0.86, 1.01, 0.14); }
+        } else if (t === Tile.Stone) {
+          this.drawStone(tx, ty, open);
         } else if (t === Tile.Metal) {
           this.drawMetal(tx, ty, open);
         } else if (t === Tile.Spikes) {
@@ -241,6 +248,22 @@ export class Renderer {
       ctx.fillStyle = COL.metalTop;
       for (let i = 0; i < 3; i++) ctx.fillRect(gt.x + 0.12 + i * 0.3, gt.y, 0.14, 1);
     }
+  }
+
+  /** Plain dark stone: staggered blocks, so it reads as ground rather than something to grab. */
+  private drawStone(tx: number, ty: number, open: boolean) {
+    const { ctx } = this;
+    ctx.fillStyle = COL.stone;
+    ctx.fillRect(tx, ty, 1.01, 1.01);
+    ctx.strokeStyle = COL.stoneLine;
+    ctx.lineWidth = 0.05;
+    ctx.beginPath();
+    const off = ty % 2 ? 0.5 : 0;
+    ctx.moveTo(tx, ty + 0.5); ctx.lineTo(tx + 1, ty + 0.5);
+    ctx.moveTo(tx + off, ty); ctx.lineTo(tx + off, ty + 0.5);
+    ctx.moveTo(tx + 0.5 - off, ty + 0.5); ctx.lineTo(tx + 0.5 - off, ty + 1);
+    ctx.stroke();
+    if (open) { ctx.fillStyle = COL.stoneTop; ctx.fillRect(tx, ty, 1.01, 0.12); }
   }
 
   private drawMetal(tx: number, ty: number, open: boolean) {

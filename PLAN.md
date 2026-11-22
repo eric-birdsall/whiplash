@@ -78,7 +78,8 @@ In Classic: **no jump.** Ever.
 
 | Char | Thing |
 |---|---|
-| `#` | Wood — solid, hookable |
+| `#` | Wood — solid, hookable. **Only used where it can be grabbed:** a tile with open air below (a ceiling underside) |
+| `%` | Stone — plain solid ground for floors and walls. Never grips in Runner; grips like wood in Classic |
 | `=` | Metal — solid, slick |
 | `^` | Spikes — kill on touch, not solid |
 | `o` | Ring anchor |

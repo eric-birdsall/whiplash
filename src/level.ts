@@ -5,6 +5,7 @@ export const enum Tile {
   Wood = 1,
   Metal = 2,
   Spikes = 3,
+  Stone = 4, // plain ground: floors and walls. Never catches the hook in Runner mode
 }
 
 export interface LevelDef {
@@ -53,6 +54,7 @@ export function parseLevel(def: LevelDef): Level {
         case '#': tiles[i] = Tile.Wood; break;
         case '=': tiles[i] = Tile.Metal; break;
         case '^': tiles[i] = Tile.Spikes; break;
+        case '%': tiles[i] = Tile.Stone; break;
         case 'o': lvl.rings.push({ x: x + 0.5, y: y + 0.5 }); break;
         case 'K': lvl.keys.push({ x: x + 0.5, y: y + 0.5 }); break;
         case 'C': lvl.crates.push({ x: x + 0.5, y: y + 1 }); break; // bottom-center

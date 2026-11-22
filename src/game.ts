@@ -4,6 +4,7 @@ import { Box, Grid, boxHitsGrid, moveAxis, overlaps, raycastGrid, rayBox, rayCir
 
 export const MAT_WOOD = 1;
 export const MAT_METAL = 2;
+export const MAT_STONE = 3;
 
 export interface Body extends Box {
   vx: number;
@@ -119,6 +120,7 @@ export class Game implements Grid {
     const t = this.level.tiles[i];
     if (t === Tile.Wood) return MAT_WOOD;
     if (t === Tile.Metal) return MAT_METAL;
+    if (t === Tile.Stone) return MAT_STONE;
     return this.dyn[i];
   }
 
@@ -366,7 +368,10 @@ export class Game implements Grid {
 
     const g = raycastGrid(ox, oy, dx, dy, maxT, this);
     if (g) {
-      const grips = g.material === MAT_WOOD && (!this.ceilingOnly || g.ny > 0);
+      // Runner: only wood undersides grip. Classic: wood and stone grip on any face.
+      const grips = this.ceilingOnly
+        ? g.material === MAT_WOOD && g.ny > 0
+        : g.material === MAT_WOOD || g.material === MAT_STONE;
       consider({ t: g.t, what: grips ? 'wood' : 'metal' });
     }
 
