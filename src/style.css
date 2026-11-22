@@ -47,6 +47,17 @@ h1 {
 h2 { margin: 0 0 8px; font-size: clamp(26px, 6vmin, 40px); }
 .tag { margin: 0 0 14px; opacity: 0.8; font-size: 18px; }
 .controls { opacity: 0.6; font-size: 14px; margin-top: 14px; max-width: 520px; }
+.build {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  top: max(6px, env(safe-area-inset-top));
+  margin: 0; opacity: 0.55; font-size: 12px;
+}
+.build button.link {
+  font-size: 12px; font-weight: 600; padding: 6px 4px; margin: 0; min-width: 0; width: auto;
+  background: none; border: none; box-shadow: none; color: inherit; text-decoration: underline; cursor: pointer;
+}
+.build button.link:hover { background: none; opacity: 1; color: #fff; }
 button {
   font: inherit;
   font-size: 18px;
@@ -106,3 +117,11 @@ body.touch .desktop-only { display: none; }
 body:not(.touch) .touch-only { display: none; }
 body.runner .classic-only { display: none; }
 body:not(.runner) .runner-only { display: none; }
+
+/* Short landscape phones: keep the title stack on screen. */
+@media (max-height: 420px) {
+  .screen h1 { font-size: clamp(36px, 13vmin, 64px); margin: 0 0 2px; }
+  .tag { margin-bottom: 8px; font-size: 15px; }
+  .screen button:not(.link) { padding: 8px 18px; font-size: 16px; margin: 4px 0; }
+  .controls { margin-top: 8px; font-size: 12px; }
+}

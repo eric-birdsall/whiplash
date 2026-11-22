@@ -94,6 +94,7 @@ document.addEventListener('click', (e) => {
     case 'title': show('title'); break;
     case 'resume': show('play'); break;
     case 'restart-level': startLevel(levelIndex); break;
+    case 'hard-reload': hardReload(); break;
     case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); applyRules(game); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
     case 'next': startLevel(Math.min(levelIndex + 1, LEVELS.length - 1)); break;
@@ -101,6 +102,25 @@ document.addEventListener('click', (e) => {
   }
 });
 $('pause-btn').addEventListener('pointerdown', (e) => { e.stopPropagation(); show('pause'); });
+
+/** Throw away the offline cache and service worker, then load the newest deploy from the network. */
+async function hardReload() {
+  const el = $('build-info');
+  if (!navigator.onLine) { el.textContent = "You're offline: keeping the saved copy"; return; }
+  el.textContent = 'Reloading…';
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    if ('caches' in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+  } catch { /* reload anyway */ }
+  location.reload();
+}
+
+function showBuildInfo() {
+  const d = new Date(__BUILD_TIME__);
+  const when = d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  $('build-info').textContent = `Updated ${when}`;
+}
 
 function onComplete() {
   recordWin(save, levelIndex, game.deaths, game.time, LEVELS.length);
@@ -186,6 +206,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 }
 
 applyMode();
+showBuildInfo();
 renderer.resize();
 checkOrientation();
 show('title');

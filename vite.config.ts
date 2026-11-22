@@ -74,4 +74,9 @@ self.addEventListener('fetch', (e) => {
 `;
 
 // Relative base so the build works on GitHub Pages under /<repo>/ and as a plain static folder.
-export default defineConfig({ base: './', plugins: [offlineServiceWorker()] });
+export default defineConfig({
+  base: './',
+  plugins: [offlineServiceWorker()],
+  // Shown on the title screen as "Updated …" so you can tell which build is running.
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
+});
