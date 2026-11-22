@@ -1,7 +1,8 @@
 // All tuning knobs in one place. Units: tiles and seconds.
 
-export const VIEW_W = 24;
-export const VIEW_H = 13.5;
+// Visible world in tiles (16:9). Bigger = zoomed out.
+export const VIEW_W = 32;
+export const VIEW_H = 18;
 export const STEP = 1 / 60;
 
 export const PLAYER_W = 0.75;
@@ -17,8 +18,8 @@ export const GROUND_ACCEL = 60;
 export const AIR_ACCEL = 14;
 
 // Jumping
-export const JUMP_VEL = 10; // ≈1.5 tiles high, ≈4.4 tiles long at base speed
-export const DOUBLE_JUMP_VEL = 9.5; // one extra jump in the air, refreshed on landing or grappling
+export const JUMP_VEL = 12.5; // ≈2.4 tiles high, ≈5.5 tiles long at base speed
+export const DOUBLE_JUMP_VEL = 12; // one extra jump in the air, refreshed on landing or grappling
 export const COYOTE = 0.1; // can still jump this long after leaving a ledge
 export const JUMP_BUFFER = 0.12; // a tap this early before landing still jumps
 

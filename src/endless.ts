@@ -29,12 +29,12 @@ export type ObstacleKind = 'jump' | 'double' | 'step' | 'beam' | 'ring';
 
 /** Tunable ranges per obstacle, in tiles at base speed (gaps scale with speed). Checked by tools/endless-check.js. */
 export const OBSTACLES = {
-  jump: { gap: [2, 3], rise: [-3, 1] },
-  double: { gap: [4, 6], rise: [-3, 1] },
-  step: { rise: [1, 2] }, // no gap: a wall to hop up (2 needs the double jump)
+  jump: { gap: [2, 4], rise: [-3, 1] },
+  double: { gap: [6, 8], rise: [-3, 1] },
+  step: { rise: [1, 3] }, // no gap: a ledge to hop up (3 needs the double jump)
   // Beam and ring gaps are wider than a double jump reaches, so they need the grapple.
-  beam: { gap: [9, 12], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
-  ring: { gap: [8, 10], rise: [-2, 0], ringAbove: 5 },
+  beam: { gap: [11, 13], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
+  ring: { gap: [11, 12], rise: [-2, 0], ringAbove: 5 },
 };
 
 export class EndlessGen {
@@ -138,6 +138,7 @@ export class EndlessRun {
     for (let x = 0; x < cols.length; x++) for (let y = 0; y < ENDLESS_H; y++) level.tiles[y * cols.length + x] = cols[x][y];
     this.game = new Game(level, sfx);
     const g = this.game;
+    g.cameraLead = 10; // runner sits near the left edge so the next landing is on screen
     this.startX = g.center().x;
     this.best = Number(localStorage.getItem(BEST_KEY)) || 0;
     this.ensure();

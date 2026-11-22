@@ -28,7 +28,7 @@ at the bottom corners. Portrait shows a "rotate your device" notice.
 ## Moves
 
 - **Run:** always to the right. Speed ramps from 7 to 10.5 tiles/s over the first 1,600 m.
-- **Jump:** ≈1.5 tiles high, ≈4.4 tiles long at base speed, with coyote time (0.1 s) and an input buffer (0.12 s).
+- **Jump:** ≈2.4 tiles high, ≈5.5 tiles long at base speed (double jump adds ≈2.25 more height), with coyote time (0.1 s) and an input buffer (0.12 s).
 - **Double jump:** one extra jump in the air, refreshed on landing or when the grapple catches.
 - **Grapple:** no aiming. It always fires up and forward at 45°; if that line would miss, it bends up
   to ±14° toward the nearest-angle thing it can hang from. Rings beat wood. Range 11 tiles.
@@ -48,20 +48,20 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 
 | Obstacle | Gap (tiles at base speed) | Notes |
 |---|---|---|
-| **beam** | 9–12 | hanging wood beam ~6 tiles above the takeoff; needs the grapple |
-| **ring** | 8–10 | ring ~5 tiles above the takeoff; needs the grapple |
-| **jump** | 2–3 | |
-| **double** | 4–6 | |
-| **step** | 0 | a 1–2 tile ledge to hop up (2 needs the double jump) |
+| **beam** | 11–13 | hanging wood beam ~6 tiles above the takeoff; needs the grapple |
+| **ring** | 11–12 | ring ~5 tiles above the takeoff; needs the grapple |
+| **jump** | 2–4 | |
+| **double** | 6–8 | |
+| **step** | 0 | a 1–3 tile ledge to hop up (3 needs the double jump) |
 
 - Gaps scale with speed; ledges move up to 1 up or 3 down.
 - The first gap is always a beam (~25 m in). Beams are the most common obstacle; rings appear from ~45 m.
   Platforms shorten as difficulty rises (full difficulty at 1,500 m). No three identical obstacles in a row.
-- The camera leads 7.5 tiles so the next landing is on screen.
+- The camera leads 10 tiles so the next landing is on screen.
 
 **Checker (dev only):** `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
 and top speed, and measures the timing window (frames where some jump / double jump / grapple clears it).
-Every variant is beatable; the tightest is 28 frames (~0.47 s). In the dev page's console:
+Every variant is beatable; the tightest is 23 frames (~0.38 s, a 13-tile beam at top speed). In the dev page's console:
 `(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5 })`.
 `window.__whiplash` (dev builds only) exposes the current run for debugging.
 
@@ -73,7 +73,7 @@ the hook head is an arcade-crane claw that opens in flight and clamps shut when 
 
 ## Screen
 
-Landscape, fixed 24 × 13.5-tile view, letterboxed. Title: **Run**, best distance, controls, and in the
+Landscape, fixed 32 × 18-tile view (zoomed out), letterboxed. The HUD is sized from the screen, not the tiles. Title: **Run**, best distance, controls, and in the
 top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Menu.
 Run over: distance (and new best), Run again, Menu.
 

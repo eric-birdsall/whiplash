@@ -322,18 +322,17 @@ export class Renderer {
   private drawHud(g: Game) {
     const { ctx } = this;
     const s = this.dpr;
-    const fs = Math.max(13, Math.min(20, this.ppt / s * 0.42)) * s;
-    ctx.font = `600 ${fs}px system-ui, -apple-system, sans-serif`;
+    // Sized from the screen, not the tile size, so zooming out doesn't shrink the HUD.
+    const fs = Math.max(14, Math.min(22, (this.canvas.height / s) * 0.032)) * s;
     ctx.textBaseline = 'top';
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    const x = this.ox + fs * 0.8, y = this.oy + fs * 0.7;
-    const label = g.hudTitle;
-    const stats = g.hudStats;
     ctx.fillStyle = COL.text;
-    ctx.globalAlpha = 0.9;
-    ctx.fillText(label, x, y);
+    const x = this.ox + fs * 0.9, y = this.oy + fs * 0.7;
+    ctx.font = `800 ${fs * 1.5}px system-ui, -apple-system, sans-serif`;
+    ctx.globalAlpha = 0.95;
+    ctx.fillText(g.hudTitle, x, y);
+    ctx.font = `600 ${fs}px system-ui, -apple-system, sans-serif`;
     ctx.globalAlpha = 0.7;
-    ctx.fillText(stats, x, y + fs * 1.35);
+    ctx.fillText(g.hudStats, x, y + fs * 1.75);
     if (g.level.hint && g.time < 9) {
       ctx.globalAlpha = Math.min(0.85, (9 - g.time) / 1.5);
       ctx.textAlign = 'center';
@@ -342,5 +341,6 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
   }
+
 
 }
