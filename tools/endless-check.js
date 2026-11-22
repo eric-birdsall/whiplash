@@ -21,14 +21,10 @@ export function strip(kind, { gap, rise, speed = C.RUN_SPEED, seed = 1 } = {}) {
   const w = cols.length;
   const tiles = new Uint8Array(w * ENDLESS_H);
   for (let x = 0; x < w; x++) for (let y = 0; y < ENDLESS_H; y++) tiles[y * w + x] = cols[x][y];
-  const level = {
-    name: 'check', w, h: ENDLESS_H, tiles, start: { x: 3, y: 14 }, exit: { x: -99, y: -99 },
-    checkpoints: [], rings, keys: [], crates: [], plates: [], levers: [], doors: [], gates: [],
-  };
+  const level = { name: 'check', w, h: ENDLESS_H, tiles, start: { x: 3, y: 14 }, rings };
   const mk = () => {
-    const g = new Game(level);
-    g.ceilingOnly = true; g.autoAim = true; g.wallKills = true; g.hookRange = C.RUNNER_HOOK_RANGE;
-    g.airJumps = 1; g.respawn = false; g.runSpeed = speed;
+    const g = new Game({ ...level, rings: rings.slice() });
+    g.runSpeed = speed;
     return g;
   };
   const gapStart = x0 + 6, gapEnd = gapStart + ch.gap;
@@ -48,7 +44,7 @@ const ACTIONS = actions();
 function play(g, segs) {
   for (const [n, hold, jump] of segs)
     for (let i = 0; i < n; i++) {
-      g.update(DT, 1, hold, hold && i === 0, g.assistAim(), jump && i === 0);
+      g.update(DT, hold, hold && i === 0, jump && i === 0);
       if (g.player.dead) return false;
     }
   return true;
@@ -57,10 +53,10 @@ function play(g, segs) {
 /** Did the runner get past the gap and stay alive for a second on the far side? */
 function cleared(g, gapEnd) {
   for (let i = 0; i < 300; i++) {
-    g.update(DT, 1, false, false, g.assistAim(), false);
+    g.update(DT, false, false, false);
     if (g.player.dead) return false;
     if (g.player.grounded && g.player.x > gapEnd + 0.2) {
-      for (let k = 0; k < 60; k++) { g.update(DT, 1, false, false, g.assistAim(), false); if (g.player.dead) return false; }
+      for (let k = 0; k < 60; k++) { g.update(DT, false, false, false); if (g.player.dead) return false; }
       return true;
     }
   }

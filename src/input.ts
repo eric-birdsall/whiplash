@@ -1,36 +1,23 @@
 // Keyboard, mouse and touch, folded into one small InputState the game reads.
+// Touch: left half of the screen jumps, right half grapples. Desktop: Space/W/↑ jump; click, Shift, K or J grapple.
 
 export interface InputState {
-  moveX: number; // -1, 0, 1
   hookDown: boolean; // held
-  hookPressed: boolean; // went down this frame (consumed by game)
-  jumpPressed: boolean; // went down this frame (runner mode)
-  aimX: number; // CSS pixels, canvas-relative
-  aimY: number;
+  hookPressed: boolean; // went down this frame
+  jumpPressed: boolean; // went down this frame
   restart: boolean;
   pause: boolean;
 }
 
-export interface TouchButton {
-  x: number;
-  y: number;
-  r: number;
-  dir: -1 | 1;
-}
-
 const HOOK_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyK', 'KeyJ'];
+const JUMP_KEYS = ['Space', 'KeyW', 'ArrowUp'];
 
 export class Input {
-  state: InputState = {
-    moveX: 0, hookDown: false, hookPressed: false, jumpPressed: false, aimX: 0, aimY: 0, restart: false, pause: false,
-  };
+  state: InputState = { hookDown: false, hookPressed: false, jumpPressed: false, restart: false, pause: false };
   touchMode = matchMedia('(pointer: coarse)').matches;
+  onFirstGesture: (() => void) | null = null;
   private keys = new Set<string>();
   private hookPointer: number | null = null;
-  private buttonPointers = new Map<number, -1 | 1>();
-  onFirstGesture: (() => void) | null = null;
-  /** Runner mode: no move buttons; on touch the left half of the screen jumps, the right half hooks. */
-  runner = false;
   private jumpPointers = new Set<number>();
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -38,39 +25,18 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === 'KeyR') this.state.restart = true;
-      if (HOOK_KEYS.includes(e.code) && this.hookPointer === null) this.state.hookPressed = true;
-      if (e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') { this.state.jumpPressed = true; e.preventDefault(); }
       if (e.code === 'Escape' || e.code === 'KeyP') this.state.pause = true;
+      if (JUMP_KEYS.includes(e.code)) { this.state.jumpPressed = true; e.preventDefault(); }
+      if (HOOK_KEYS.includes(e.code) && this.hookPointer === null) this.state.hookPressed = true;
       this.gesture();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => {
-      this.keys.clear();
-      this.buttonPointers.clear();
-      this.jumpPointers.clear();
-      this.hookPointer = null;
-      this.state.hookDown = false;
-    });
+    addEventListener('blur', () => this.releaseAll());
 
     canvas.addEventListener('pointerdown', (e) => this.down(e));
     addEventListener('pointerup', (e) => this.up(e));
     addEventListener('pointercancel', (e) => this.up(e));
-    canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'mouse') this.setAim(e);
-    });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-
-  /** Touch buttons in CSS pixels, bottom-left. */
-  buttons(): TouchButton[] {
-    const h = this.canvas.clientHeight;
-    const r = Math.max(34, Math.min(56, h * 0.09));
-    const pad = r * 0.5;
-    const y = h - pad - r;
-    return [
-      { x: pad + r, y, r, dir: -1 },
-      { x: pad + r * 3.4, y, r, dir: 1 },
-    ];
   }
 
   private gesture() {
@@ -80,68 +46,36 @@ export class Input {
     }
   }
 
-  private setAim(e: PointerEvent) {
-    const rect = this.canvas.getBoundingClientRect();
-    this.state.aimX = e.clientX - rect.left;
-    this.state.aimY = e.clientY - rect.top;
-  }
-
   private down(e: PointerEvent) {
     e.preventDefault();
     this.gesture();
     if (e.pointerType === 'touch') this.touchMode = true;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-
-    if (this.touchMode && e.pointerType !== 'mouse' && this.runner) {
-      if (px < this.canvas.clientWidth / 2) {
+    // Touch: the left half of the screen jumps. A mouse click anywhere grapples.
+    if (e.pointerType !== 'mouse') {
+      const x = e.clientX - this.canvas.getBoundingClientRect().left;
+      if (x < this.canvas.clientWidth / 2) {
         this.jumpPointers.add(e.pointerId);
         this.state.jumpPressed = true;
         return;
       }
-    } else if (this.touchMode && e.pointerType !== 'mouse') {
-      for (const b of this.buttons()) {
-        // generous hit area: 1.35x radius
-        if (Math.hypot(px - b.x, py - b.y) < b.r * 1.35) {
-          this.buttonPointers.set(e.pointerId, b.dir);
-          return;
-        }
-      }
     }
     if (this.hookPointer !== null) return;
     this.hookPointer = e.pointerId;
-    this.setAim(e);
-    this.state.hookDown = true;
     this.state.hookPressed = true;
   }
 
   private up(e: PointerEvent) {
-    this.buttonPointers.delete(e.pointerId);
     this.jumpPointers.delete(e.pointerId);
-    if (e.pointerId === this.hookPointer) {
-      this.hookPointer = null;
-      this.state.hookDown = false;
-    }
+    if (e.pointerId === this.hookPointer) this.hookPointer = null;
   }
 
   /** Call once per rendered frame before stepping the game. */
   poll() {
-    let x = 0;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) x -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1;
-    for (const d of this.buttonPointers.values()) x += d;
-    this.state.moveX = Math.max(-1, Math.min(1, x));
     this.state.hookDown = this.hookPointer !== null || HOOK_KEYS.some((k) => this.keys.has(k));
   }
 
-  /** Which touch buttons are currently held (for drawing). */
-  heldDirs(): Set<number> {
-    return new Set(this.buttonPointers.values());
-  }
-
-  /** Which runner-mode touch zones are held: 'jump' and/or 'hook' (for drawing). */
+  /** Which touch zones are held (for drawing). */
   heldZones(): { jump: boolean; hook: boolean } {
     return { jump: this.jumpPointers.size > 0, hook: this.hookPointer !== null };
   }
@@ -154,10 +88,10 @@ export class Input {
   }
 
   releaseAll() {
+    this.keys.clear();
     this.hookPointer = null;
-    this.state.hookDown = false;
-    this.buttonPointers.clear();
     this.jumpPointers.clear();
+    this.state.hookDown = false;
     this.clearEdges();
   }
 }

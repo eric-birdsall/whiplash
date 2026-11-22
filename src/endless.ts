@@ -133,19 +133,11 @@ export class EndlessRun {
       name: 'Endless',
       hint: 'Tap left to jump (again in the air to double jump). Tap right to grapple.',
       w: cols.length, h: ENDLESS_H, tiles: new Uint8Array(cols.length * ENDLESS_H),
-      start: { x: 4, y: this.gen.gy }, exit: { x: -100, y: -100 },
-      checkpoints: [], rings: [], keys: [], crates: [], plates: [], levers: [], doors: [], gates: [],
+      start: { x: 4, y: this.gen.gy }, rings: [],
     };
     for (let x = 0; x < cols.length; x++) for (let y = 0; y < ENDLESS_H; y++) level.tiles[y * cols.length + x] = cols[x][y];
     this.game = new Game(level, sfx);
     const g = this.game;
-    g.ceilingOnly = true;
-    g.autoAim = true;
-    g.wallKills = true;
-    g.hookRange = C.RUNNER_HOOK_RANGE;
-    g.airJumps = 1;
-    g.respawn = false;
-    g.cameraLead = 7.5; // runner sits near the left edge so the next landing is on screen
     this.startX = g.center().x;
     this.best = Number(localStorage.getItem(BEST_KEY)) || 0;
     this.ensure();
@@ -159,9 +151,10 @@ export class EndlessRun {
   /** Call every fixed step before game.update. */
   tick() {
     const g = this.game;
-    g.runSpeed = C.RUN_SPEED + 3.5 * Math.min(1, this.distance / 1600);
+    g.runSpeed = C.RUN_SPEED + C.RUN_SPEED_GAIN * Math.min(1, this.distance / 1600);
     this.ensure();
-    g.hudStats = `${this.distance} m    best ${Math.max(this.best, this.distance)} m`;
+    g.hudTitle = `${this.distance} m`;
+    g.hudStats = `best ${Math.max(this.best, this.distance)} m`;
   }
 
   private ensure() {
@@ -169,7 +162,7 @@ export class EndlessRun {
     while (g.w - g.player.x < AHEAD) {
       // Avoid three of the same obstacle in a row.
       // The very first gap is a grapple beam, so the hook is in play straight away.
-      let kind = this.chunks++ === 0 ? 'beam' : this.gen.pick(this.difficulty);
+      let kind: ObstacleKind = this.chunks++ === 0 ? 'beam' : this.gen.pick(this.difficulty);
       if (this.lastKinds.length >= 2 && this.lastKinds.every((k) => k === kind)) kind = this.gen.pick(this.difficulty);
       const chunk = this.gen.next(g.runSpeed, this.difficulty, kind);
       this.lastKinds = [...this.lastKinds.slice(-1), chunk.kind];

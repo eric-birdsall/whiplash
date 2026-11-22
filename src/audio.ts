@@ -64,17 +64,8 @@ export class Audio {
       case 'attach': this.tone('square', 220, 140, 0.06, 0.12); this.noise(0.05, 0.3, 1200, 2); break;
       case 'clank': this.tone('square', 1400, 1100, 0.08, 0.07); this.tone('sine', 2600, 2400, 0.15, 0.05); break;
       case 'miss': this.tone('sine', 500, 250, 0.1, 0.05); break;
-      case 'pull': this.tone('sawtooth', 160, 320, 0.18, 0.06); break;
-      case 'key': [880, 1175, 1568].forEach((f, i) => this.tone('triangle', f, f, 0.15, 0.12, i * 0.07)); break;
-      case 'door': this.tone('square', 180, 90, 0.25, 0.1); this.noise(0.3, 0.2, 600, 1); break;
-      case 'lever': this.tone('square', 600, 400, 0.05, 0.1); this.tone('square', 900, 700, 0.05, 0.08, 0.06); break;
-      case 'plate': this.tone('triangle', 300, 220, 0.08, 0.1); break;
-      case 'gate': this.tone('sawtooth', 120, 240, 0.35, 0.07); this.noise(0.35, 0.12, 400, 1); break;
       case 'death': this.noise(0.35, 0.4, 500, 0.7); this.tone('sawtooth', 300, 60, 0.35, 0.1); break;
-      case 'checkpoint': [660, 990].forEach((f, i) => this.tone('triangle', f, f, 0.18, 0.12, i * 0.09)); break;
-      case 'mantle': this.noise(0.08, 0.2, 900, 1.5); this.tone('triangle', 300, 500, 0.08, 0.07); break;
       case 'jump': this.noise(0.06, 0.18, 1400, 1.2); this.tone('triangle', 260, 520, 0.09, 0.07); break;
-      case 'win': [523, 659, 784, 1047].forEach((f, i) => this.tone('triangle', f, f, 0.25, 0.13, i * 0.1)); break;
     }
   }
 }

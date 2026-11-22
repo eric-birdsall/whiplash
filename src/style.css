@@ -47,8 +47,7 @@ h1 {
 h2 { margin: 0 0 8px; font-size: clamp(26px, 6vmin, 40px); }
 .tag { margin: 0 0 14px; opacity: 0.8; font-size: 18px; }
 .controls { opacity: 0.6; font-size: 14px; margin-top: 14px; max-width: 520px; }
-.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-.row button { min-width: 160px; }
+.best { margin: 8px 0 0; opacity: 0.75; font-weight: 600; min-height: 1.2em; }
 #over-stats { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
 .build {
   position: absolute;
@@ -79,15 +78,6 @@ button.primary { background: #ffc93c; color: #1b1406; border-color: #ffc93c; }
 button.primary:hover { background: #ffd666; }
 button:disabled { opacity: 0.35; cursor: default; }
 
-#level-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  width: min(820px, 100%);
-  margin-bottom: 8px;
-}
-#level-list button { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-#level-list small { font-weight: 400; opacity: 0.7; font-size: 13px; }
 
 #pause-btn {
   position: fixed;
@@ -118,8 +108,6 @@ button:disabled { opacity: 0.35; cursor: default; }
 
 body.touch .desktop-only { display: none; }
 body:not(.touch) .touch-only { display: none; }
-body.runner .classic-only { display: none; }
-body:not(.runner) .runner-only { display: none; }
 
 /* Short landscape phones: keep the title stack on screen. */
 @media (max-height: 420px) {

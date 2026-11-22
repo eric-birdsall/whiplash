@@ -1,111 +1,53 @@
 import * as C from './config';
-import { Game } from './game';
-import { parseLevel } from './level';
-import { LEVELS } from './levels';
 import { Input } from './input';
-import { Renderer, formatTime } from './render';
+import { Renderer } from './render';
 import { Audio } from './audio';
-import { loadSave, recordWin } from './save';
 import { EndlessRun } from './endless';
 
-type Screen = 'title' | 'select' | 'play' | 'won' | 'pause' | 'complete' | 'over';
+type Screen = 'title' | 'play' | 'dying' | 'pause' | 'over';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const audio = new Audio();
-const save = loadSave();
 
 let screen: Screen = 'title';
-let levelIndex = 0;
-// Runner mode (default): always run right, tap to jump. Classic: move freely, no jump.
-const MODE_KEY = 'whiplash.mode';
-let runner = localStorage.getItem(MODE_KEY) !== 'classic';
-let game = makeGame(0);
-let mouseSeen = false;
-/** The current endless run, or null when playing a level. */
-let run: EndlessRun | null = null;
-
-/** Mode-specific rules on a game instance. */
-function applyRules(g: Game) {
-  g.ceilingOnly = runner;
-  g.hookRange = runner ? C.RUNNER_HOOK_RANGE : C.HOOK_RANGE;
-  g.wallKills = runner;
-  g.autoAim = runner;
-}
-
-function applyMode() {
-  input.runner = runner || !!run;
-  document.body.classList.toggle('runner', runner);
-  $('tagline').textContent = runner ? 'Never stop running.' : 'No jump. Just the hook.';
-  document.querySelectorAll('.mode-btn').forEach((b) => { b.textContent = `Mode: ${runner ? 'Runner' : 'Classic'}`; });
-}
+/** The current run. A fresh one sits behind the title screen as a backdrop. */
+let run = newRun();
 
 input.onFirstGesture = () => audio.unlock();
-canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') mouseSeen = true; });
 
-function makeGame(i: number): Game {
-  const g = new Game(parseLevel(LEVELS[i]), (s) => audio.play(s));
-  applyRules(g);
+function newRun(): EndlessRun {
+  const r = new EndlessRun((s) => audio.play(s));
   renderer.resize();
-  renderer.snapCamera(g);
-  return g;
+  renderer.snapCamera(r.game);
+  return r;
 }
 
 // ---------- Screens ----------
 
 const $ = (id: string) => document.getElementById(id)!;
-const screens: Record<Exclude<Screen, 'play' | 'won'>, HTMLElement> = {
-  title: $('title'), select: $('select'), pause: $('pause'), complete: $('complete'), over: $('over'),
-};
+const screens: Record<'title' | 'pause' | 'over', HTMLElement> = { title: $('title'), pause: $('pause'), over: $('over') };
 
 function show(s: Screen) {
   screen = s;
   for (const [k, el] of Object.entries(screens)) el.classList.toggle('hidden', k !== s);
   $('pause-btn').classList.toggle('hidden', s !== 'play');
   input.releaseAll();
-  if (s === 'select') buildLevelList();
   if (s === 'pause') $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`;
+  if (s === 'title') $('title-best').textContent = run.best > 0 ? `Best: ${run.best} m` : '';
 }
 
-function startLevel(i: number) {
-  run = null;
-  input.runner = runner;
-  levelIndex = i;
-  game = makeGame(i);
-  show('play');
-}
-
-function startEndless() {
-  run = new EndlessRun((s) => audio.play(s));
-  game = run.game;
-  input.runner = true; // Endless always uses Runner controls
-  renderer.resize();
-  renderer.snapCamera(game);
+function startRun() {
+  run = newRun();
   show('play');
 }
 
 function onRunOver() {
-  if (!run) return;
   const d = run.distance;
   const best = run.finish();
   $('over-stats').textContent = best ? `${d} m   — new best!` : `${d} m   (best ${run.best} m)`;
   show('over');
-}
-
-function buildLevelList() {
-  const list = $('level-list');
-  list.innerHTML = '';
-  LEVELS.forEach((lv, i) => {
-    const b = document.createElement('button');
-    const best = save.best[i];
-    b.disabled = i > save.unlocked;
-    b.innerHTML = `<span>${i + 1}. ${lv.name}</span><small>${
-      best ? `☠ ${best.deaths} · ${formatTime(best.time)}` : i > save.unlocked ? 'locked' : 'not cleared'
-    }</small>`;
-    b.onclick = () => startLevel(i);
-    list.appendChild(b);
-  });
 }
 
 document.addEventListener('click', (e) => {
@@ -113,17 +55,12 @@ document.addEventListener('click', (e) => {
   if (!action) return;
   audio.unlock();
   switch (action) {
-    case 'endless': startEndless(); break;
-    case 'play': startLevel(Math.min(save.unlocked, LEVELS.length - 1)); break;
-    case 'select': show('select'); break;
-    case 'title': show('title'); break;
+    case 'play': startRun(); break;
+    case 'title': run = newRun(); show('title'); break;
     case 'resume': show('play'); break;
-    case 'restart-level': if (run) startEndless(); else startLevel(levelIndex); break;
+    case 'restart': startRun(); break;
     case 'hard-reload': hardReload(); break;
-    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); applyRules(game); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
-    case 'next': startLevel(Math.min(levelIndex + 1, LEVELS.length - 1)); break;
-    case 'replay': startLevel(levelIndex); break;
   }
 });
 $('pause-btn').addEventListener('pointerdown', (e) => { e.stopPropagation(); show('pause'); });
@@ -149,21 +86,12 @@ function showBuildInfo() {
   $('build-info').textContent = `Updated ${when}`;
 }
 
-function onComplete() {
-  recordWin(save, levelIndex, game.deaths, game.time, LEVELS.length);
-  const last = levelIndex >= LEVELS.length - 1;
-  $('complete-stats').textContent = `☠ ${game.deaths}   ⏱ ${formatTime(game.time)}${last ? '   — you finished every level!' : ''}`;
-  ($('next-btn') as HTMLButtonElement).classList.toggle('hidden', last);
-  show('complete');
-}
-
 // ---------- Orientation ----------
 
 function checkOrientation() {
   const touch = input.touchMode;
   document.body.classList.toggle('touch', touch);
-  const portrait = innerHeight > innerWidth;
-  const block = touch && portrait;
+  const block = touch && innerHeight > innerWidth;
   $('rotate').classList.toggle('hidden', !block);
   if (block && screen === 'play') show('pause');
 }
@@ -183,53 +111,37 @@ function frame(now: number) {
   last = now;
   input.poll();
   const st = input.state;
+  const game = run.game;
 
   if (screen === 'play') {
     if (st.pause) show('pause');
+    else if (st.restart) startRun();
     else {
-      if (st.restart) {
-        if (run) startEndless();
-        else { game.restart(); renderer.snapCamera(game); }
-      }
       acc += dt;
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
       while (acc >= C.STEP) {
-        if (run) run.tick();
-        const auto = runner || !!run;
-        const aim = auto ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY);
-        const wasDead = game.player.dead;
-        game.update(C.STEP, auto ? 1 : st.moveX, st.hookDown, pressed, aim, auto && jump);
-        if (wasDead && !game.player.dead) renderer.snapCamera(game);
-        pressed = false;
-        jump = false;
+        run.tick();
+        game.update(C.STEP, st.hookDown, pressed, jump);
+        pressed = jump = false;
         acc -= C.STEP;
       }
-      if (run && game.player.dead && screen === 'play') {
-        screen = 'won'; // let the death burst play, then show the score
-        setTimeout(() => { if (screen === 'won' && run) onRunOver(); }, 900);
-      }
-      if (game.completed && screen === 'play') {
-        // Let the win burst play for a beat.
-        screen = 'won';
-        setTimeout(() => { if (screen === 'won') onComplete(); }, 800);
+      if (game.player.dead) {
+        screen = 'dying'; // let the burst play, then show the score
+        setTimeout(() => { if (screen === 'dying') onRunOver(); }, 900);
       }
     }
   } else if (st.pause && screen === 'pause') {
     show('play');
   } else {
     acc = 0;
-    if (screen === 'won') game.update(dt, 0, false, false, { x: 0, y: 0 }); // particles only
+    if (screen === 'dying') game.update(dt, false, false, false); // particles only
   }
 
-  renderer.updateCamera(game, dt);
-  const showAim = screen === 'play' && (runner || !!run || (mouseSeen && !input.touchMode));
-  renderer.draw(game, {
-    aim: !showAim ? null : runner || run ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY),
-    touch: input.touchMode && (screen === 'play' || screen === 'won'),
-    buttons: input.buttons(),
-    held: input.heldDirs(),
-    runner: runner || !!run,
+  renderer.updateCamera(run.game, dt);
+  renderer.draw(run.game, {
+    aim: screen === 'play' ? run.game.assistAim() : null,
+    touch: input.touchMode && (screen === 'play' || screen === 'dying'),
     zones: input.heldZones(),
   });
   input.clearEdges();
@@ -237,14 +149,13 @@ function frame(now: number) {
 }
 
 // Dev only: a console handle for debugging and screenshots.
-if (import.meta.env.DEV) (window as unknown as { __whiplash: object }).__whiplash = { get game() { return game; }, get run() { return run; }, renderer };
+if (import.meta.env.DEV) (window as unknown as { __whiplash: object }).__whiplash = { get game() { return run.game; }, get run() { return run; }, renderer };
 
 // Offline play (iPhone "Add to Home Screen"): the service worker is generated by the production build.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support is optional */ }); });
 }
 
-applyMode();
 showBuildInfo();
 renderer.resize();
 checkOrientation();

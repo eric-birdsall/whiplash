@@ -22,47 +22,26 @@
 
   <div id="title" class="screen">
     <h1>WHIPLASH</h1>
-    <p class="tag" id="tagline">Never stop running.</p>
-    <div class="row">
-      <button data-action="play" class="primary">Play</button>
-      <button data-action="endless" class="primary">Endless</button>
-    </div>
-    <button data-action="select">Levels</button>
-    <button data-action="mode" class="mode-btn">Mode: Runner</button>
-    <p class="controls desktop-only runner-only">Space / W / ↑ to jump · Click or Shift to grapple, hold to hang · R restart · Esc pause</p>
-    <p class="controls touch-only runner-only">Tap the left half to jump · Tap the right half to grapple, hold to hang</p>
-    <p class="controls desktop-only classic-only">A/D or ←/→ to move · Click to hook, hold to hang · R restart · Esc pause</p>
-    <p class="controls touch-only classic-only">◀ ▶ to move · Tap anywhere to hook, hold to hang</p>
+    <p class="tag">Never stop running.</p>
+    <button data-action="play" class="primary">Run</button>
+    <p class="best" id="title-best"></p>
+    <p class="controls desktop-only">Space / W / ↑ to jump (again in the air to double jump) · Click or Shift to grapple, hold to swing · R restart · Esc pause</p>
+    <p class="controls touch-only">Tap the left half to jump (again in the air to double jump) · Tap the right half to grapple, hold to swing</p>
     <p class="build"><span id="build-info"></span> · <button type="button" class="link" data-action="hard-reload">⟳ Reload latest</button></p>
-  </div>
-
-  <div id="select" class="screen hidden">
-    <h2>Levels</h2>
-    <div id="level-list"></div>
-    <button data-action="title">Back</button>
   </div>
 
   <div id="pause" class="screen hidden">
     <h2>Paused</h2>
     <button data-action="resume" class="primary">Resume</button>
-    <button data-action="restart-level">Restart level</button>
+    <button data-action="restart">Restart</button>
     <button data-action="mute" id="mute-btn">Sound: on</button>
-    <button data-action="mode" class="mode-btn">Mode: Runner</button>
-    <button data-action="select">Levels</button>
-  </div>
-
-  <div id="complete" class="screen hidden">
-    <h2>Level complete</h2>
-    <p id="complete-stats"></p>
-    <button data-action="next" class="primary" id="next-btn">Next level</button>
-    <button data-action="replay">Replay</button>
-    <button data-action="select">Levels</button>
+    <button data-action="title">Menu</button>
   </div>
 
   <div id="over" class="screen hidden">
     <h2>Run over</h2>
     <p id="over-stats"></p>
-    <button data-action="endless" class="primary">Run again</button>
+    <button data-action="play" class="primary">Run again</button>
     <button data-action="title">Menu</button>
   </div>
 

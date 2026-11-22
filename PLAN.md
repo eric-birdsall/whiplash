@@ -1,9 +1,9 @@
-# Whiplash — MVP Plan
+# Whiplash — Plan
 
-A 2D grappling-hook platformer. Swing from the hook, reel yourself in, and yank things to you.
-Two modes: **Runner** (always running, tap to jump, time your grapples) and **Classic** (free movement, no jump).
+An endless 2D grappling-hook runner. The hero never stops running; you jump, double jump, and fire a
+grapple at 45° to swing across gaps between floating platforms. One life: go as far as you can.
 
-**Audience:** teens and adults. A skill game — you can fall and die, retry instantly.
+**Audience:** teens and adults. A skill game: quick runs, instant retry, chase your best distance.
 
 ## Tech
 
@@ -12,184 +12,103 @@ Two modes: **Runner** (always running, tap to jump, time your grapples) and **Cl
 | Build | Vite + TypeScript, no runtime dependencies |
 | Rendering | Plain Canvas 2D, flat vector shapes (no art assets) |
 | Physics | Custom: tile-grid AABB collision + rope distance constraint, fixed 60 Hz step |
-| Audio | Synthesized with Web Audio (no files). SFX only, mute toggle. No music in MVP |
-| Levels | ASCII tile maps in `src/levels/` |
-| Save | `localStorage` (unlocked levels, best deaths/time) |
-| Hosting | GitHub Pages via Actions workflow; Vite `base: './'` so it works under any subpath |
-
-## Modes
-
-Toggle on the title and pause screens (saved in `localStorage` as `whiplash.mode`). Both modes share levels and saves.
-
-- **Runner (default):** the hero always runs right. You time jumps and grapples. Hanging on the rope
-  still pumps the swing forward. Jump ≈ 1.5 tiles high and ≈ 4.4 tiles long, with coyote time (0.1 s)
-  and an input buffer (0.12 s).
-- **Classic:** move freely, no jump. The original puzzle-platformer design.
-
-Keys are collected by hooking them *or* by touching them (e.g. jumping through a floating key).
-
-**Fixed 45° grapple with aim assist (Runner):** no aiming. Every grapple fires up and forward at 45°.
-If that line would miss, it bends up to ±14° toward the nearest-angle grabbable thing (wood ceiling,
-ring, key, crate, lever). Hook range is 11 tiles in Runner (9 in Classic). A dotted guide line shows
-where the next grapple will go and rings the target when it's locked, so the game is all about timing.
-Level rule: anything you need to grab must sit up-and-ahead of where you'll be, near that 45° line.
-Keys can also be placed in a swing's path and collected by touch.
-
-**No softlocks (Runner):** standing pinned against anything you can't get past (a wall, a stuck crate,
-a locked door, a closed gate) for 0.45 s is a fail, with the same quick checkpoint respawn as a pit.
-Hanging on the rope or pulling something pauses that clock but doesn't reset it.
-
-**Forgiving grapple:** a tap is remembered for 0.25 s while held and fires the moment the hook is
-ready (so taps during the short post-release cooldown aren't lost). In Runner, an airborne tap with
-nothing locked waits within that time for a target instead of firing at empty air. Missed shots snap
-back fast (return speed 160, cooldown 0.06 s).
-
-**Aim-assist priority:** within the ±14° cone, rings, keys, levers and crates win over plain wood.
-
-**Runner level rules (checked by tools):**
-- Every obstacle has its grab point near the 45° line from a comfortable approach (hanging wood beams
-  are fine). Rings sit high enough to fire at while still running.
-- Every step needs a timing window of at least ~15 frames (0.25 s). Current minimum: 19.
-- Keys you need mid-crossing sit at the bottom of a ring's swing, so you collect them by touch.
-- Dev tools (in the dev server's console): `(await import('/tools/routes.js')).windowsAll()` prints the
-  window per step for each level's reference route; `(await import('/tools/sim.js')).auditR(level)`
-  plays sloppy random runs and reports death hotspots, softlocks and completions.
-
-**Ceiling-only grapple (Runner):** wood only catches the hook on its *underside*: you grapple ceilings,
-not ledge tops or walls (those clank off like metal). Rings work from any angle; keys, crates and levers
-still get pulled. Runner levels therefore need wood ceilings (or rings) wherever a climb is higher than a jump.
-Classic mode still grips any wood face.
-
-## Endless
-
-One procedurally generated level that keeps growing ahead of you (`src/endless.ts`). Always uses
-Runner rules, plus a **double jump** (one extra jump in the air, refreshed on landing or grappling).
-One life: falling or getting pinned ends the run. Score is distance in meters; best is saved in
-`localStorage` (`whiplash.endless.best`).
-
-- Platforms are floating stone slabs (2 tiles thick) with open air below; falling off the bottom ends the run.
-- Each chunk is a platform then one obstacle: **beam** (gap 9–12 under a hanging wood beam ~6 above
-  the takeoff), **ring** (gap 8–10 with a ring ~5 above), **jump** (gap 2–3), **double** (gap 4–6),
-  **step** (a 1–2 tile ledge). Beam and ring gaps are wider than a double jump, so they need the grapple.
-  Gaps scale with speed; ledges move up to 3 down or 1 up.
-- The grapple leads: the first gap is always a beam (about 25 m in), beams are the most common obstacle,
-  and rings appear from ~45 m. Speed ramps 7 → 10.5 over 1,600 m; platforms shorten as it gets harder.
-- The camera leads 7.5 tiles so the next landing is on screen.
-- `tools/endless-check.js` checks every obstacle at the ends of its ranges and at both speeds and
-  measures the timing window (minimum 28 frames).
+| Audio | Synthesized with Web Audio (no files). SFX only, mute toggle. No music |
+| World | Generated on the fly in `src/endless.ts`; the tile grid grows to the right as you run |
+| Save | `localStorage` `whiplash.endless.best` (best distance) |
+| Hosting | GitHub Pages via Actions workflow; Vite `base: './'`; installable PWA with offline play |
 
 ## Controls
 
-**Runner, desktop:** Space / W / ↑ jump · click (anywhere) or Shift / K to grapple, hold to stay attached · R restart · Esc pause.
+**Touch (landscape only):** tap the **left half** of the screen to jump (tap again in the air to double
+jump) · tap the **right half** to grapple, hold to swing, release to fling. Faint JUMP / HOOK labels sit
+at the bottom corners. Portrait shows a "rotate your device" notice.
 
-**Runner, mobile:** tap the **left half** of the screen to jump · tap the **right half** to grapple
-(where you tap doesn't matter), hold to stay attached. Faint JUMP / HOOK labels sit at the bottom corners.
+**Desktop:** Space / W / ↑ jump · click (anywhere), Shift, K or J to grapple, hold to swing · R restart · Esc pause.
 
-**Classic, desktop:** A/D or ←/→ move · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
+## Moves
 
-**Classic, mobile (landscape only):** big ◀ ▶ buttons bottom-left · tap anywhere else fires the hook toward that
-point, hold to stay attached · multitouch so you can hold ▶ while hooking.
+- **Run:** always to the right. Speed ramps from 7 to 10.5 tiles/s over the first 1,600 m.
+- **Jump:** ≈1.5 tiles high, ≈4.4 tiles long at base speed, with coyote time (0.1 s) and an input buffer (0.12 s).
+- **Double jump:** one extra jump in the air, refreshed on landing or when the grapple catches.
+- **Grapple:** no aiming. It always fires up and forward at 45°; if that line would miss, it bends up
+  to ±14° toward the nearest-angle thing it can hang from. Rings beat wood. Range 11 tiles.
+  - Only the **underside of wood** catches it (stone, and the tops and sides of wood, bounce it off).
+    Rings work from any angle.
+  - Hold to hang while the rope reels in; release to fling. Hanging uses lower gravity (20) for a
+    slower, floatier swing.
+  - **Forgiving input:** a tap is remembered for 0.25 s while held and fires as soon as the hook is
+    ready; an airborne tap with nothing in reach waits (within that time) for a target. Misses snap back
+    fast (160 tiles/s, 0.06 s cooldown).
+  - A dotted guide line shows where the next grapple will go and rings the target when it's locked.
+- **Fail:** falling off the bottom, or being pinned against a wall for 0.45 s, ends the run (no softlocks).
 
-Portrait shows a "rotate your device" notice. Touch controls appear only on touch devices.
+## The course
 
-Input is a thin layer producing `{ moveX, hookDown, hookPressed, jumpPressed, aimScreen }`, so gamepad can be added later.
+Each chunk is a floating stone platform (2 tiles thick, open air below) followed by one obstacle:
 
-In Classic: **no jump.** Ever.
+| Obstacle | Gap (tiles at base speed) | Notes |
+|---|---|---|
+| **beam** | 9–12 | hanging wood beam ~6 tiles above the takeoff; needs the grapple |
+| **ring** | 8–10 | ring ~5 tiles above the takeoff; needs the grapple |
+| **jump** | 2–3 | |
+| **double** | 4–6 | |
+| **step** | 0 | a 1–2 tile ledge to hop up (2 needs the double jump) |
 
-## The hook
+- Gaps scale with speed; ledges move up to 1 up or 3 down.
+- The first gap is always a beam (~25 m in). Beams are the most common obstacle; rings appear from ~45 m.
+  Platforms shorten as difficulty rises (full difficulty at 1,500 m). No three identical obstacles in a row.
+- The camera leads 7.5 tiles so the next landing is on screen.
 
-- Fires as a fast projectile in the aim direction, max range ~9 tiles. Hits the first thing on its path.
-- **What it does on hit** (color language in brackets):
-  - **Wood** tiles `[warm brown]` and **rings** `[glowing]` → **anchor**.
-  - **Metal** tiles, doors, gates `[cool gray]` → slick, the hook bounces back.
-  - **Light objects** — keys, crates `[gold]` → yanked to you (commits even if you let go).
-  - **Lever** → flips it, hook returns.
-  - Nothing within range → hook returns.
-- **Mass rule:** light objects come to you; heavy/fixed things (tiles, rings) pull *you* to them.
-- **While anchored (hold):** the rope reels in steadily to a short minimum length. Left/right pumps the
-  swing. **Release** to let go and keep all your momentum (fling). Rope is a one-sided distance constraint
-  (can go slack, never stretches).
-- **Mantle:** if you're reeled against a wall and the anchor is at that ledge's top, you pop up onto
-  the ledge. This is how you climb, and it handles small steps too (the player is 1.25 tiles tall).
-- After the hook returns there's a tiny cooldown (~0.15 s).
-- **Aim preview (desktop):** a dotted line to the cursor shows what the hook would hit, colored by material.
-- **Pulled crates** are dragged horizontally (gravity still on) until something blocks them, so they fall
-  into gaps. At rest, crates ease onto the tile grid and prefer dropping into a hole they fit.
-- **Auto step-up** of ≤0.3 tiles so you can walk over a crate bridge sitting a hair below the floor.
+**Checker (dev only):** `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
+and top speed, and measures the timing window (frames where some jump / double jump / grapple clears it).
+Every variant is beatable; the tightest is 28 frames (~0.47 s). In the dev page's console:
+`(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5 })`.
+`window.__whiplash` (dev builds only) exposes the current run for debugging.
 
-## World
+## Look
 
-| Char | Thing |
-|---|---|
-| `#` | Wood — solid, hookable. **Only used where it can be grabbed:** a tile with open air below (a ceiling underside) |
-| `%` | Stone — plain solid ground for floors and walls. Never grips in Runner; grips like wood in Classic |
-| `=` | Metal — solid, slick |
-| `^` | Spikes — kill on touch, not solid |
-| `o` | Ring anchor |
-| `K` | Key — pull to collect |
-| `D` | Locked door — solid metal; touch it holding a key to open (connected `D`s are one door) |
-| `C` | Crate — gravity box; pull it or push it (slowly). Fills gaps, holds plates |
-| `P` | Pressure plate — pressed by player or crate. Put plates at the bottom of a 1-wide hole so the crate drops in flush and doesn't block the (jumpless) path |
-| `L` | Lever — hook it to toggle |
-| `G` | Gate — solid metal; open while **all** plates are pressed and **all** levers are on |
-| `S` | Player start |
-| `F` | Checkpoint flag |
-| `E` | Exit flag — touch to finish |
-
-Falling off the bottom of the map is death. Crates that fall out of the world return to their start.
-
-## Failure
-
-- Spikes and pits kill. ~0.5 s respawn at the last checkpoint, no lives.
-- Objects reset to the snapshot taken when the checkpoint was reached → no softlocks.
-- HUD death counter.
+Flat vector art with a color language: wood (warm brown, bright underside lip) = grabbable;
+dark stone = platforms; cyan rings = anchors. The hero is an original commando with a grapple gauntlet;
+the hook head is an arcade-crane claw that opens in flight and clamps shut when it catches.
 
 ## Screen
 
-- Fixed virtual view of 24 × 13.5 tiles (16:9), scaled to fit, letterboxed.
-- Camera follows the player smoothly, clamped to level bounds.
-
-## Levels (MVP = 5)
-
-1. **First Swing** — wood ceiling, swing over spike pits, mantle up a ledge.
-2. **Slick** — metal everywhere; find the wood patches and rings.
-3. **Fetch** — keys over chasms, locked doors.
-4. **Heavy Lifting** — crates as bridges and plate weights, a lever, a gate.
-5. **Everything** — combines all of it.
-
-Title screen → level select (unlocks in order) → play → level complete (deaths, time) → next.
-
-## Code layout
-
-```
-src/
-  main.ts        boot, fixed-step loop, screen state
-  config.ts      all tuning constants
-  input.ts       keyboard / mouse / touch → InputState
-  level.ts       ASCII parse → Level (tiles + object list)
-  levels/        the five maps
-  physics.ts     AABB vs tile collision, raycast
-  game.ts        world state, player, hook, objects, triggers, death/respawn
-  render.ts      canvas drawing, camera, particles, touch buttons
-  audio.ts       synthesized SFX
-  ui.ts          DOM menus (title, select, pause, complete, rotate notice)
-  save.ts        localStorage
-```
+Landscape, fixed 24 × 13.5-tile view, letterboxed. Title: **Run**, best distance, controls, and in the
+top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Menu.
+Run over: distance (and new best), Run again, Menu.
 
 ## Install & offline (PWA)
 
 - `public/manifest.webmanifest`: name, fullscreen, landscape, icons (192, 512, maskable 512).
 - iOS: `apple-touch-icon` (180), `apple-mobile-web-app-capable`, `black-translucent` status bar, title.
 - Service worker: `vite.config.ts` writes `dist/sw.js` after each build, precaching every output file.
-  The cache name is a hash of all files, so each deploy replaces the old cache. Pages load
-  network-first (3 s timeout) so new deploys show up; hashed assets load cache-first.
+  The cache name is a hash of all files, so each deploy replaces the old cache. Pages are fetched
+  network-first with `cache: 'no-cache'` (3 s timeout) so new deploys show up; hashed assets load cache-first.
   It's registered only in production builds (`npm run dev` has no service worker).
+- **Reload latest** unregisters the service worker, clears caches, refreshes the HTTP cache and reloads.
+  It does nothing when offline, so the saved copy isn't lost.
 - Icons are drawn by `tools/make_icons.py` (Pillow): `python3 -m venv .venv && .venv/bin/pip install pillow && .venv/bin/python tools/make_icons.py`.
-- Title screen top-left: "Updated <build time>" (baked in at build, shown in local time) and
-  **Reload latest**, which unregisters the service worker, clears caches, refreshes the HTTP cache and
-  reloads. It does nothing when offline, so the saved copy isn't lost.
-- On iPhone: open the site in Safari → Share → Add to Home Screen. Saves made in the home-screen app
-  are separate from Safari's.
+- On iPhone: Safari → Share → Add to Home Screen. The home-screen app's best score is separate from Safari's.
+
+## Code layout
+
+```
+src/
+  main.ts        screens, game loop, PWA registration
+  endless.ts     course generator (EndlessGen) and run controller (EndlessRun)
+  game.ts        simulation: running, jumps, grapple, rope, fail checks
+  physics.ts     AABB vs tile grid, raycasts
+  level.ts       tile types and world data
+  render.ts      camera, tiles, rings, aim guide, rope + claw, HUD, touch zones
+  hero.ts        the commando: pose and drawing
+  claw.ts        the arcade-crane claw
+  input.ts       keyboard / mouse / touch → InputState
+  audio.ts       synthesized sound effects
+  config.ts      every tuning constant
+tools/
+  endless-check.js  obstacle checker (dev only)
+  make_icons.py     app icon generator
+```
 
 ## Running
 
@@ -199,14 +118,9 @@ npm run dev      # http://localhost:5173
 npm run build    # static site in dist/
 ```
 
-GitHub Pages: push to `main` on a GitHub repo and set Settings → Pages → Source to **GitHub Actions**;
-`.github/workflows/deploy.yml` builds and deploys.
+GitHub Pages: pushing to `main` builds and deploys via `.github/workflows/deploy.yml`.
 
-**Level solver (dev only):** `tools/sim.js` runs the real simulation headlessly from the dev page's console
-and brute-forces swings, to check a level is still solvable after tuning. See the header comment in that file.
-Every MVP level has been solved with it.
+## Later
 
-## Out of scope for MVP (later)
-
-Rope wrapping around corners · enemies · gamepad · music · character sprites · level editor / Tiled ·
-speedrun timer leaderboards.
+Music · spikes or hazards on platforms · enemies to yank · pickups and score multipliers · gamepad ·
+leaderboards.
