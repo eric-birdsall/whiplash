@@ -147,6 +147,9 @@ src/
   network-first (3 s timeout) so new deploys show up; hashed assets load cache-first.
   It's registered only in production builds (`npm run dev` has no service worker).
 - Icons are drawn by `tools/make_icons.py` (Pillow): `python3 -m venv .venv && .venv/bin/pip install pillow && .venv/bin/python tools/make_icons.py`.
+- Title screen top-left: "Updated <build time>" (baked in at build, shown in local time) and
+  **Reload latest**, which unregisters the service worker, clears caches, refreshes the HTTP cache and
+  reloads. It does nothing when offline, so the saved copy isn't lost.
 - On iPhone: open the site in Safari → Share → Add to Home Screen. Saves made in the home-screen app
   are separate from Safari's.
 
