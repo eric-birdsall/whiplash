@@ -63,7 +63,7 @@ export class Renderer {
 
   private cameraTarget(g: Game): Vec {
     const c = g.center();
-    let x = c.x - C.VIEW_W / 2 + g.player.facing * 1.5;
+    let x = c.x - C.VIEW_W / 2 + g.player.facing * g.cameraLead;
     let y = c.y - C.VIEW_H / 2 - 0.5;
     x = g.w <= C.VIEW_W ? (g.w - C.VIEW_W) / 2 : Math.max(0, Math.min(g.w - C.VIEW_W, x));
     y = g.h <= C.VIEW_H ? (g.h - C.VIEW_H) / 2 : Math.max(0, Math.min(g.h - C.VIEW_H, y));
@@ -505,7 +505,7 @@ export class Renderer {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     const x = this.ox + fs * 0.8, y = this.oy + fs * 0.7;
     const label = `${g.level.name}`;
-    const stats = `☠ ${g.deaths}    ⏱ ${formatTime(g.time)}`;
+    const stats = g.hudStats ?? `☠ ${g.deaths}    ⏱ ${formatTime(g.time)}`;
     ctx.fillStyle = COL.text;
     ctx.globalAlpha = 0.9;
     ctx.fillText(label, x, y);

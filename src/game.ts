@@ -76,6 +76,17 @@ export class Game implements Grid {
   /** Runner mode: aim is the fixed 45° assisted shot; airborne taps wait for a lock. */
   autoAim = false;
   private hookBuffer = 0;
+  /** Horizontal run speed (Endless ramps it up). */
+  runSpeed: number = C.RUN_SPEED;
+  /** Extra jumps allowed in the air (Endless: 1 = double jump). */
+  airJumps = 0;
+  private airJumpsLeft = 0;
+  /** false = death ends the run (Endless) instead of respawning at the checkpoint. */
+  respawn = true;
+  /** How far ahead (tiles) the camera looks in the facing direction. */
+  cameraLead = 1.5;
+  /** Replaces the deaths/time HUD line when set (Endless shows distance). */
+  hudStats: string | null = null;
   private blockedX = false;
   private pinned = 0;
   private jumpBuffer = 0;
@@ -117,6 +128,25 @@ export class Game implements Grid {
     this.rebuildDyn();
     this.takeSnapshot();
     this.placePlayer();
+  }
+
+  /**
+   * Endless: append columns on the right. Each column is h tile values, top to bottom.
+   * Rings far behind the player are dropped so hook raycasts stay cheap.
+   */
+  appendColumns(cols: Uint8Array[], rings: Vec[]) {
+    const oldW = this.w, h = this.h, nw = oldW + cols.length;
+    const t = new Uint8Array(nw * h);
+    for (let y = 0; y < h; y++) {
+      t.set(this.level.tiles.subarray(y * oldW, (y + 1) * oldW), y * nw);
+      for (let i = 0; i < cols.length; i++) t[y * nw + oldW + i] = cols[i][y];
+    }
+    this.level.tiles = t;
+    this.level.w = this.w = nw;
+    this.dyn = new Uint8Array(nw * h);
+    this.rebuildDyn();
+    const cutoff = this.player.x - 40;
+    this.level.rings = this.level.rings.filter((r) => r.x > cutoff).concat(rings);
   }
 
   // ---------- Grid ----------
@@ -240,7 +270,7 @@ export class Game implements Grid {
     const p = this.player;
     if (p.dead) {
       p.deadTimer -= dt;
-      if (p.deadTimer <= 0) {
+      if (p.deadTimer <= 0 && this.respawn) {
         this.restoreSnapshot();
         this.placePlayer();
       }
@@ -453,8 +483,18 @@ export class Game implements Grid {
   /** Runner-mode jump, with coyote time and an input buffer so taps feel fair. */
   private tryJump(dt: number, pressed: boolean) {
     const p = this.player;
-    this.jumpBuffer = pressed ? C.JUMP_BUFFER : Math.max(0, this.jumpBuffer - dt);
+    if (p.grounded || this.hook.kind === 'anchored') this.airJumpsLeft = this.airJumps;
     this.coyote = p.grounded ? C.COYOTE : Math.max(0, this.coyote - dt);
+    // In the air (past coyote time) with a jump to spare: a tap is a double jump, right now.
+    if (pressed && !p.grounded && this.coyote <= 0 && this.airJumpsLeft > 0 && this.hook.kind !== 'anchored') {
+      this.airJumpsLeft--;
+      p.vy = -C.DOUBLE_JUMP_VEL;
+      this.jumpBuffer = 0;
+      this.burst(p.x + p.w / 2, p.y + p.h, 10, '#7df0ff', 4);
+      this.sfx('jump');
+      return;
+    }
+    this.jumpBuffer = pressed ? C.JUMP_BUFFER : Math.max(0, this.jumpBuffer - dt);
     if (this.jumpBuffer <= 0 || this.coyote <= 0) return;
     p.vy = -C.JUMP_VEL;
     p.grounded = false;
@@ -471,7 +511,7 @@ export class Game implements Grid {
 
     // Horizontal control
     if (p.grounded) {
-      const target = moveX * C.RUN_SPEED;
+      const target = moveX * this.runSpeed;
       if (moveX) {
         const a = C.GROUND_ACCEL * dt;
         p.vx += Math.max(-a, Math.min(a, target - p.vx));
@@ -483,7 +523,7 @@ export class Game implements Grid {
       p.vx += moveX * C.SWING_PUMP * dt;
     } else {
       if (moveX) {
-        const target = moveX * C.RUN_SPEED;
+        const target = moveX * this.runSpeed;
         if ((moveX > 0 && p.vx < target) || (moveX < 0 && p.vx > target)) {
           p.vx += moveX * C.AIR_ACCEL * dt;
           if ((moveX > 0 && p.vx > target) || (moveX < 0 && p.vx < target)) p.vx = target;

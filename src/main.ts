@@ -6,8 +6,9 @@ import { Input } from './input';
 import { Renderer, formatTime } from './render';
 import { Audio } from './audio';
 import { loadSave, recordWin } from './save';
+import { EndlessRun } from './endless';
 
-type Screen = 'title' | 'select' | 'play' | 'won' | 'pause' | 'complete';
+type Screen = 'title' | 'select' | 'play' | 'won' | 'pause' | 'complete' | 'over';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
@@ -22,6 +23,8 @@ const MODE_KEY = 'whiplash.mode';
 let runner = localStorage.getItem(MODE_KEY) !== 'classic';
 let game = makeGame(0);
 let mouseSeen = false;
+/** The current endless run, or null when playing a level. */
+let run: EndlessRun | null = null;
 
 /** Mode-specific rules on a game instance. */
 function applyRules(g: Game) {
@@ -32,7 +35,7 @@ function applyRules(g: Game) {
 }
 
 function applyMode() {
-  input.runner = runner;
+  input.runner = runner || !!run;
   document.body.classList.toggle('runner', runner);
   $('tagline').textContent = runner ? 'Never stop running.' : 'No jump. Just the hook.';
   document.querySelectorAll('.mode-btn').forEach((b) => { b.textContent = `Mode: ${runner ? 'Runner' : 'Classic'}`; });
@@ -53,7 +56,7 @@ function makeGame(i: number): Game {
 
 const $ = (id: string) => document.getElementById(id)!;
 const screens: Record<Exclude<Screen, 'play' | 'won'>, HTMLElement> = {
-  title: $('title'), select: $('select'), pause: $('pause'), complete: $('complete'),
+  title: $('title'), select: $('select'), pause: $('pause'), complete: $('complete'), over: $('over'),
 };
 
 function show(s: Screen) {
@@ -66,9 +69,28 @@ function show(s: Screen) {
 }
 
 function startLevel(i: number) {
+  run = null;
+  input.runner = runner;
   levelIndex = i;
   game = makeGame(i);
   show('play');
+}
+
+function startEndless() {
+  run = new EndlessRun((s) => audio.play(s));
+  game = run.game;
+  input.runner = true; // Endless always uses Runner controls
+  renderer.resize();
+  renderer.snapCamera(game);
+  show('play');
+}
+
+function onRunOver() {
+  if (!run) return;
+  const d = run.distance;
+  const best = run.finish();
+  $('over-stats').textContent = best ? `${d} m   — new best!` : `${d} m   (best ${run.best} m)`;
+  show('over');
 }
 
 function buildLevelList() {
@@ -91,11 +113,12 @@ document.addEventListener('click', (e) => {
   if (!action) return;
   audio.unlock();
   switch (action) {
+    case 'endless': startEndless(); break;
     case 'play': startLevel(Math.min(save.unlocked, LEVELS.length - 1)); break;
     case 'select': show('select'); break;
     case 'title': show('title'); break;
     case 'resume': show('play'); break;
-    case 'restart-level': startLevel(levelIndex); break;
+    case 'restart-level': if (run) startEndless(); else startLevel(levelIndex); break;
     case 'hard-reload': hardReload(); break;
     case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); applyRules(game); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
@@ -164,18 +187,27 @@ function frame(now: number) {
   if (screen === 'play') {
     if (st.pause) show('pause');
     else {
-      if (st.restart) { game.restart(); renderer.snapCamera(game); }
+      if (st.restart) {
+        if (run) startEndless();
+        else { game.restart(); renderer.snapCamera(game); }
+      }
       acc += dt;
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
       while (acc >= C.STEP) {
-        const aim = runner ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY);
+        if (run) run.tick();
+        const auto = runner || !!run;
+        const aim = auto ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY);
         const wasDead = game.player.dead;
-        game.update(C.STEP, runner ? 1 : st.moveX, st.hookDown, pressed, aim, runner && jump);
+        game.update(C.STEP, auto ? 1 : st.moveX, st.hookDown, pressed, aim, auto && jump);
         if (wasDead && !game.player.dead) renderer.snapCamera(game);
         pressed = false;
         jump = false;
         acc -= C.STEP;
+      }
+      if (run && game.player.dead && screen === 'play') {
+        screen = 'won'; // let the death burst play, then show the score
+        setTimeout(() => { if (screen === 'won' && run) onRunOver(); }, 900);
       }
       if (game.completed && screen === 'play') {
         // Let the win burst play for a beat.
@@ -191,18 +223,21 @@ function frame(now: number) {
   }
 
   renderer.updateCamera(game, dt);
-  const showAim = screen === 'play' && (runner || (mouseSeen && !input.touchMode));
+  const showAim = screen === 'play' && (runner || !!run || (mouseSeen && !input.touchMode));
   renderer.draw(game, {
-    aim: !showAim ? null : runner ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY),
+    aim: !showAim ? null : runner || run ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY),
     touch: input.touchMode && (screen === 'play' || screen === 'won'),
     buttons: input.buttons(),
     held: input.heldDirs(),
-    runner,
+    runner: runner || !!run,
     zones: input.heldZones(),
   });
   input.clearEdges();
   requestAnimationFrame(frame);
 }
+
+// Dev only: a console handle for debugging and screenshots.
+if (import.meta.env.DEV) (window as unknown as { __whiplash: object }).__whiplash = { get game() { return game; }, get run() { return run; }, renderer };
 
 // Offline play (iPhone "Add to Home Screen"): the service worker is generated by the production build.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

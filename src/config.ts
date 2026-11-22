@@ -46,4 +46,5 @@ export const RESPAWN_DELAY = 0.5;
 export const JUMP_VEL = 10; // ≈1.5 tiles high, ≈4.4 tiles long at run speed
 export const COYOTE = 0.1; // can still jump this long after leaving a ledge
 export const JUMP_BUFFER = 0.12; // a tap this early before landing still jumps
+export const DOUBLE_JUMP_VEL = 9.5; // Endless: one extra jump in the air, refreshed on landing or grappling
 export const PIN_KILL = 0.45; // Runner: pinned against a wall this long counts as a fail (no softlocks)

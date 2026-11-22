@@ -60,6 +60,21 @@ not ledge tops or walls (those clank off like metal). Rings work from any angle;
 still get pulled. Runner levels therefore need wood ceilings (or rings) wherever a climb is higher than a jump.
 Classic mode still grips any wood face.
 
+## Endless
+
+One procedurally generated level that keeps growing ahead of you (`src/endless.ts`). Always uses
+Runner rules, plus a **double jump** (one extra jump in the air, refreshed on landing or grappling).
+One life: falling or getting pinned ends the run. Score is distance in meters; best is saved in
+`localStorage` (`whiplash.endless.best`).
+
+- Each chunk is a stone platform then one obstacle: **jump** (gap 2–3), **double** (gap 4–6),
+  **step** (a 1–2 tile wall), **beam** (gap 7–11 under a hanging wood beam ~6 above the takeoff),
+  **ring** (gap 6–9 with a ring ~5 above). Gaps scale with speed; ledges move up/down a little.
+- Speed ramps 7 → 10.5 over 1,600 m; platforms shorten and rings appear as difficulty rises.
+- The camera leads 7.5 tiles so the next landing is on screen.
+- `tools/endless-check.js` checks every obstacle at the ends of its ranges and at both speeds and
+  measures the timing window (minimum 28 frames).
+
 ## Controls
 
 **Runner, desktop:** Space / W / ↑ jump · click (anywhere) or Shift / K to grapple, hold to stay attached · R restart · Esc pause.
