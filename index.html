@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#05070c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Whiplash</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <button id="pause-btn" class="hidden" aria-label="Pause">❚❚</button>
+
+  <div id="title" class="screen">
+    <h1>WHIPLASH</h1>
+    <p class="tag">No jump. Just the hook.</p>
+    <button data-action="play" class="primary">Play</button>
+    <button data-action="select">Levels</button>
+    <p class="controls desktop-only">A/D or ←/→ to move · Click to hook, hold to hang · R restart · Esc pause</p>
+    <p class="controls touch-only">◀ ▶ to move · Tap anywhere to hook, hold to hang</p>
+  </div>
+
+  <div id="select" class="screen hidden">
+    <h2>Levels</h2>
+    <div id="level-list"></div>
+    <button data-action="title">Back</button>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <h2>Paused</h2>
+    <button data-action="resume" class="primary">Resume</button>
+    <button data-action="restart-level">Restart level</button>
+    <button data-action="mute" id="mute-btn">Sound: on</button>
+    <button data-action="select">Levels</button>
+  </div>
+
+  <div id="complete" class="screen hidden">
+    <h2>Level complete</h2>
+    <p id="complete-stats"></p>
+    <button data-action="next" class="primary" id="next-btn">Next level</button>
+    <button data-action="replay">Replay</button>
+    <button data-action="select">Levels</button>
+  </div>
+
+  <div id="rotate" class="hidden">
+    <div class="phone">📱</div>
+    <p>Turn your device sideways</p>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

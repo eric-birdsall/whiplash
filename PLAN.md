@@ -1,0 +1,130 @@
+# Whiplash — MVP Plan
+
+A 2D, no-jump puzzle platformer. Your grappling hook is your only way up:
+swing from it, reel yourself in, and yank things to you.
+
+**Audience:** teens and adults. A skill game — you can fall and die, retry instantly.
+
+## Tech
+
+| Decision | Choice |
+|---|---|
+| Build | Vite + TypeScript, no runtime dependencies |
+| Rendering | Plain Canvas 2D, flat vector shapes (no art assets) |
+| Physics | Custom: tile-grid AABB collision + rope distance constraint, fixed 60 Hz step |
+| Audio | Synthesized with Web Audio (no files). SFX only, mute toggle. No music in MVP |
+| Levels | ASCII tile maps in `src/levels/` |
+| Save | `localStorage` (unlocked levels, best deaths/time) |
+| Hosting | GitHub Pages via Actions workflow; Vite `base: './'` so it works under any subpath |
+
+## Controls
+
+**Desktop:** A/D or ←/→ move · mouse click aims & fires the hook toward the cursor, hold to stay
+attached · R restart from checkpoint · Esc pause.
+
+**Mobile (landscape only):** big ◀ ▶ buttons bottom-left · tap anywhere else fires the hook toward that
+point, hold to stay attached · multitouch so you can hold ▶ while hooking. Portrait shows a
+"rotate your device" notice. Touch buttons appear only on touch devices.
+
+Input is a thin layer producing `{ moveX, hookDown, hookPressed, aimScreen }`, so gamepad can be added later.
+
+**No jump.** Ever.
+
+## The hook
+
+- Fires as a fast projectile in the aim direction, max range ~9 tiles. Hits the first thing on its path.
+- **What it does on hit** (color language in brackets):
+  - **Wood** tiles `[warm brown]` and **rings** `[glowing]` → **anchor**.
+  - **Metal** tiles, doors, gates `[cool gray]` → slick, the hook bounces back.
+  - **Light objects** — keys, crates `[gold]` → yanked to you (commits even if you let go).
+  - **Lever** → flips it, hook returns.
+  - Nothing within range → hook returns.
+- **Mass rule:** light objects come to you; heavy/fixed things (tiles, rings) pull *you* to them.
+- **While anchored (hold):** the rope reels in steadily to a short minimum length. Left/right pumps the
+  swing. **Release** to let go and keep all your momentum (fling). Rope is a one-sided distance constraint
+  (can go slack, never stretches).
+- **Mantle:** if you're reeled against a wall and the anchor is at that ledge's top, you pop up onto
+  the ledge. This is how you climb, and it handles small steps too (the player is 1.25 tiles tall).
+- After the hook returns there's a tiny cooldown (~0.15 s).
+- **Aim preview (desktop):** a dotted line to the cursor shows what the hook would hit, colored by material.
+- **Pulled crates** are dragged horizontally (gravity still on) until something blocks them, so they fall
+  into gaps. At rest, crates ease onto the tile grid and prefer dropping into a hole they fit.
+- **Auto step-up** of ≤0.3 tiles so you can walk over a crate bridge sitting a hair below the floor.
+
+## World
+
+| Char | Thing |
+|---|---|
+| `#` | Wood — solid, hookable |
+| `=` | Metal — solid, slick |
+| `^` | Spikes — kill on touch, not solid |
+| `o` | Ring anchor |
+| `K` | Key — pull to collect |
+| `D` | Locked door — solid metal; touch it holding a key to open (connected `D`s are one door) |
+| `C` | Crate — gravity box; pull it or push it (slowly). Fills gaps, holds plates |
+| `P` | Pressure plate — pressed by player or crate. Put plates at the bottom of a 1-wide hole so the crate drops in flush and doesn't block the (jumpless) path |
+| `L` | Lever — hook it to toggle |
+| `G` | Gate — solid metal; open while **all** plates are pressed and **all** levers are on |
+| `S` | Player start |
+| `F` | Checkpoint flag |
+| `E` | Exit flag — touch to finish |
+
+Falling off the bottom of the map is death. Crates that fall out of the world return to their start.
+
+## Failure
+
+- Spikes and pits kill. ~0.5 s respawn at the last checkpoint, no lives.
+- Objects reset to the snapshot taken when the checkpoint was reached → no softlocks.
+- HUD death counter.
+
+## Screen
+
+- Fixed virtual view of 24 × 13.5 tiles (16:9), scaled to fit, letterboxed.
+- Camera follows the player smoothly, clamped to level bounds.
+
+## Levels (MVP = 5)
+
+1. **First Swing** — wood ceiling, swing over spike pits, mantle up a ledge.
+2. **Slick** — metal everywhere; find the wood patches and rings.
+3. **Fetch** — keys over chasms, locked doors.
+4. **Heavy Lifting** — crates as bridges and plate weights, a lever, a gate.
+5. **Everything** — combines all of it.
+
+Title screen → level select (unlocks in order) → play → level complete (deaths, time) → next.
+
+## Code layout
+
+```
+src/
+  main.ts        boot, fixed-step loop, screen state
+  config.ts      all tuning constants
+  input.ts       keyboard / mouse / touch → InputState
+  level.ts       ASCII parse → Level (tiles + object list)
+  levels/        the five maps
+  physics.ts     AABB vs tile collision, raycast
+  game.ts        world state, player, hook, objects, triggers, death/respawn
+  render.ts      canvas drawing, camera, particles, touch buttons
+  audio.ts       synthesized SFX
+  ui.ts          DOM menus (title, select, pause, complete, rotate notice)
+  save.ts        localStorage
+```
+
+## Running
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # static site in dist/
+```
+
+GitHub Pages: push to `main` on a GitHub repo and set Settings → Pages → Source to **GitHub Actions**;
+`.github/workflows/deploy.yml` builds and deploys.
+
+**Level solver (dev only):** `tools/sim.js` runs the real simulation headlessly from the dev page's console
+and brute-forces swings, to check a level is still solvable after tuning. See the header comment in that file.
+Every MVP level has been solved with it.
+
+## Out of scope for MVP (later)
+
+Rope wrapping around corners · enemies · gamepad · music · character sprites · level editor / Tiled ·
+speedrun timer leaderboards.
