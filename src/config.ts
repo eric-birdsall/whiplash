@@ -43,3 +43,7 @@ export const ROPE_MAX_SPEED = 17;
 export const RING_RADIUS = 0.32;
 
 export const PIN_KILL = 0.45; // pinned against a wall this long ends the run (no softlocks)
+
+// Landing after a swing gives a short speed burst: the run speed target rises by this much and fades out.
+export const LAND_BOOST = 3;
+export const LAND_BOOST_TIME = 0.8;

@@ -3,6 +3,7 @@ import { Input } from './input';
 import { Renderer } from './render';
 import { Audio } from './audio';
 import { EndlessRun } from './endless';
+import type { Game } from './game';
 
 type Screen = 'title' | 'play' | 'dying' | 'pause' | 'over';
 
@@ -109,6 +110,28 @@ let acc = 0;
 /** Did this frame run at least one physics step (and so consume the presses)? */
 let stepped = true;
 
+/** Positions before the latest physics step, for render interpolation. */
+type Snap = { game: Game; px: number; py: number; hook: string; hx: number; hy: number };
+function snapshot(g: Game): Snap {
+  const h = g.hook;
+  return { game: g, px: g.player.x, py: g.player.y, hook: h.kind, hx: h.kind === 'idle' ? 0 : h.x, hy: h.kind === 'idle' ? 0 : h.y };
+}
+let prev: Snap = snapshot(run.game);
+
+/** Move the player (and a moving hook) to `alpha` of the way from `from` to now. Returns an undo. */
+function interpolate(g: Game, from: Snap, alpha: number): () => void {
+  if (from.game !== g || alpha >= 1) return () => {};
+  const p = g.player, h = g.hook;
+  const px = p.x, py = p.y;
+  p.x = from.px + (px - from.px) * alpha;
+  p.y = from.py + (py - from.py) * alpha;
+  if (h.kind === 'idle' || h.kind !== from.hook) return () => { p.x = px; p.y = py; };
+  const hx = h.x, hy = h.y;
+  h.x = from.hx + (hx - from.hx) * alpha;
+  h.y = from.hy + (hy - from.hy) * alpha;
+  return () => { p.x = px; p.y = py; h.x = hx; h.y = hy; };
+}
+
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -126,6 +149,7 @@ function frame(now: number) {
       stepped = false;
       while (acc >= C.STEP) {
         stepped = true;
+        prev = snapshot(game);
         run.tick();
         game.update(C.STEP, st.hookDown, pressed, jump);
         pressed = jump = false;
@@ -143,12 +167,16 @@ function frame(now: number) {
     if (screen === 'dying') game.update(dt, false, false, false); // particles only
   }
 
+  // Draw between the last two physics steps so motion is smooth on any refresh rate.
+  // (Snapping to the latest step makes the hero judder against the camera, which reads as blur.)
+  const restore = interpolate(run.game, prev, screen === 'play' ? acc / C.STEP : 1);
   renderer.updateCamera(run.game, dt);
   renderer.draw(run.game, {
     aim: screen === 'play' ? run.game.assistAim() : null,
     touch: input.touchMode && (screen === 'play' || screen === 'dying'),
     zones: input.heldZones(),
   });
+  restore();
   input.clearEdges(stepped || screen !== 'play');
   requestAnimationFrame(frame);
 }

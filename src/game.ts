@@ -56,6 +56,10 @@ export class Game implements Grid {
   private pinned = 0;
   private jumpBuffer = 0;
   private coyote = 0;
+  /** Swung on the rope since last touching the ground (landing then gives a speed burst). */
+  private swung = false;
+  /** Extra run speed from landing a swing; fades to 0 over LAND_BOOST_TIME. */
+  landBoost = 0;
 
   constructor(public level: Level, private sfx: (s: Sfx) => void = () => {}) {
     this.w = level.w;
@@ -278,10 +282,13 @@ export class Game implements Grid {
     const h = this.hook;
     const anchored = h.kind === 'anchored';
 
+    if (anchored) this.swung = true;
+    this.landBoost = Math.max(0, this.landBoost - (C.LAND_BOOST / C.LAND_BOOST_TIME) * dt);
+
     // Always running right: accelerate on the ground, steer toward run speed in the air, pump on the rope.
     if (p.grounded) {
       const a = C.GROUND_ACCEL * dt;
-      p.vx += Math.max(-a, Math.min(a, this.runSpeed - p.vx));
+      p.vx += Math.max(-a, Math.min(a, this.runSpeed + this.landBoost - p.vx));
     } else if (anchored) {
       p.vx += C.SWING_PUMP * dt;
     } else if (p.vx < this.runSpeed) {
@@ -326,8 +333,16 @@ export class Game implements Grid {
       if (!stepped) { p.vx = 0; this.blockedX = true; }
     }
     if (moveAxis(p, 'y', p.vy * dt, this, [])) p.vy = 0;
+    const wasGrounded = p.grounded;
     p.grounded = this.onGround(p);
     if (p.grounded && p.vy > 0) p.vy = 0;
+    if (p.grounded && !wasGrounded && this.swung) {
+      // Landing out of a swing: a short speed burst, at least as fast as the boosted run speed.
+      this.landBoost = C.LAND_BOOST;
+      p.vx = Math.max(p.vx, this.runSpeed + this.landBoost);
+      this.burst(p.x, p.y + p.h, 8, '#7df0ff', 3, 6);
+    }
+    if (p.grounded) this.swung = false;
   }
 
   /** Pinned against a wall you can't get past → the run ends (no softlocks). */
