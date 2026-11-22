@@ -401,8 +401,8 @@ export class Renderer {
     if (len < 0.01) return;
     dx /= len; dy /= len;
     const busy = g.hook.kind !== 'idle';
-    const hit = g.castHook(c.x, c.y, dx, dy, C.HOOK_RANGE);
-    const t = hit ? hit.t : C.HOOK_RANGE;
+    const hit = g.castHook(c.x, c.y, dx, dy, g.hookRange);
+    const t = hit ? hit.t : g.hookRange;
     let color = 'rgba(255,255,255,0.35)';
     if (hit) {
       color = {

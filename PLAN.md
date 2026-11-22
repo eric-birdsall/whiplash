@@ -28,6 +28,13 @@ Toggle on the title and pause screens (saved in `localStorage` as `whiplash.mode
 
 Keys are collected by hooking them *or* by touching them (e.g. jumping through a floating key).
 
+**Fixed 45° grapple with aim assist (Runner):** no aiming. Every grapple fires up and forward at 45°.
+If that line would miss, it bends up to ±14° toward the nearest-angle grabbable thing (wood ceiling,
+ring, key, crate, lever). Hook range is 11 tiles in Runner (9 in Classic). A dotted guide line shows
+where the next grapple will go and rings the target when it's locked, so the game is all about timing.
+Level rule: anything you need to grab must sit up-and-ahead of where you'll be, near that 45° line.
+Keys can also be placed in a swing's path and collected by touch.
+
 **Ceiling-only grapple (Runner):** wood only catches the hook on its *underside*: you grapple ceilings,
 not ledge tops or walls (those clank off like metal). Rings work from any angle; keys, crates and levers
 still get pulled. Runner levels therefore need wood ceilings (or rings) wherever a climb is higher than a jump.
@@ -35,12 +42,10 @@ Classic mode still grips any wood face.
 
 ## Controls
 
-**Runner, desktop:** Space / W / ↑ jump · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
+**Runner, desktop:** Space / W / ↑ jump · click (anywhere) or Shift / K to grapple, hold to stay attached · R restart · Esc pause.
 
-**Runner, mobile:** tap the **left half** of the screen to jump · tap the **right half** to fire the hook
-toward that point, hold to stay attached. Faint JUMP / HOOK labels sit at the bottom corners.
-Because grapple taps must be in the right half, hook targets in runner levels should sit ahead of the
-camera center (≈ 1.5 tiles ahead of the hero).
+**Runner, mobile:** tap the **left half** of the screen to jump · tap the **right half** to grapple
+(where you tap doesn't matter), hold to stay attached. Faint JUMP / HOOK labels sit at the bottom corners.
 
 **Classic, desktop:** A/D or ←/→ move · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
 

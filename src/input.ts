@@ -18,6 +18,8 @@ export interface TouchButton {
   dir: -1 | 1;
 }
 
+const HOOK_KEYS = ['ShiftLeft', 'ShiftRight', 'KeyK', 'KeyJ'];
+
 export class Input {
   state: InputState = {
     moveX: 0, hookDown: false, hookPressed: false, jumpPressed: false, aimX: 0, aimY: 0, restart: false, pause: false,
@@ -36,6 +38,7 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === 'KeyR') this.state.restart = true;
+      if (HOOK_KEYS.includes(e.code) && this.hookPointer === null) this.state.hookPressed = true;
       if (e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') { this.state.jumpPressed = true; e.preventDefault(); }
       if (e.code === 'Escape' || e.code === 'KeyP') this.state.pause = true;
       this.gesture();
@@ -130,6 +133,7 @@ export class Input {
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) x += 1;
     for (const d of this.buttonPointers.values()) x += d;
     this.state.moveX = Math.max(-1, Math.min(1, x));
+    this.state.hookDown = this.hookPointer !== null || HOOK_KEYS.some((k) => this.keys.has(k));
   }
 
   /** Which touch buttons are currently held (for drawing). */

@@ -70,6 +70,7 @@ export class Game implements Grid {
   cooldown = 0;
   /** Runner mode: wood only catches the hook on its underside (a ceiling), not ledge tops or walls. */
   ceilingOnly = false;
+  hookRange = C.HOOK_RANGE;
   private jumpBuffer = 0;
   private coyote = 0;
   crates: Crate[];
@@ -246,6 +247,27 @@ export class Game implements Grid {
     this.checkFlags();
   }
 
+  /**
+   * Runner aim: a fixed 45° shot up and forward. If it would miss, bend up to AIM_ASSIST toward the
+   * closest angle that hits something grabbable (wood ceiling, ring, key, crate, lever).
+   * Returns a world point along the chosen direction, plus whether it locks onto something.
+   */
+  assistAim(): { x: number; y: number; locked: boolean } {
+    const c = this.center();
+    const f = this.player.facing >= 0 ? 1 : -1;
+    const stepA = (1.5 * Math.PI) / 180;
+    for (let k = 0; k * stepA <= C.AIM_ASSIST + 1e-6; k++) {
+      for (const s of k === 0 ? [1] : [1, -1]) {
+        const a = C.AUTO_AIM_ANGLE + s * k * stepA;
+        const dx = Math.cos(a) * f, dy = -Math.sin(a);
+        const hit = this.castHook(c.x, c.y, dx, dy, this.hookRange);
+        if (hit && hit.what !== 'metal') return { x: c.x + dx * 5, y: c.y + dy * 5, locked: true };
+      }
+    }
+    const a = C.AUTO_AIM_ANGLE;
+    return { x: c.x + Math.cos(a) * f * 5, y: c.y - Math.sin(a) * 5, locked: false };
+  }
+
   private fire(aim: Vec) {
     const c = this.center();
     let dx = aim.x - c.x, dy = aim.y - c.y;
@@ -263,11 +285,11 @@ export class Game implements Grid {
     switch (h.kind) {
       case 'flying': {
         if (!hookDown) h.held = false;
-        const step = Math.min(C.HOOK_SPEED * dt, C.HOOK_RANGE - h.dist);
+        const step = Math.min(C.HOOK_SPEED * dt, this.hookRange - h.dist);
         const hit = this.castHook(h.x, h.y, h.dx, h.dy, step);
         if (!hit) {
           h.x += h.dx * step; h.y += h.dy * step; h.dist += step;
-          if (h.dist >= C.HOOK_RANGE - 1e-4) {
+          if (h.dist >= this.hookRange - 1e-4) {
             this.hook = { kind: 'returning', x: h.x, y: h.y };
             this.sfx('miss');
           }

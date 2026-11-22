@@ -150,61 +150,80 @@ export function chain(lvl, prefixSteps, targets, land) {
   return { ok: true, log, final: st(g), segs };
 }
 
-// ---------- Runner mode (auto-run right, jump, ceiling-only grapple, touch rule) ----------
-// Segments: [frames, hookHeld, aim?, jumpOnFirstFrame?]. moveX is always 1.
-// Touch rule: hook taps must land right of the camera center (the right half of the screen).
+// ---------- Runner mode (auto-run right, jump, ceiling-only, fixed 45° auto-aim) ----------
+// Segments: [frames, hookHeld, _, jumpOnFirstFrame?]. moveX is always 1, aim is always game.assistAim().
 
-export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; return g; };
-export const camCenter = (g) => g.w <= 24 ? g.w / 2 : Math.max(12, Math.min(g.w - 12, g.center().x + 1.5));
+export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; g.hookRange = 11; return g; };
 
 export function repR(lvl, segs) {
   const g = mkR(lvl);
-  for (const [n, hold, aim, j] of segs)
-    for (let i = 0; i < n; i++) g.update(DT, 1, hold, hold && i === 0, aim || NONE, !!j && i === 0);
+  for (const [n, hold, , j] of segs)
+    for (let i = 0; i < n; i++) g.update(DT, 1, hold, hold && i === 0, g.assistAim(), !!j && i === 0);
   return g;
 }
 
-function landR(g, x0, x1, fm) {
+function landR(g, x0, x1, fm, need) {
   for (let i = 0; i < 240; i++) {
-    g.update(DT, 1, false, false, NONE, false);
+    g.update(DT, 1, false, false, g.assistAim(), false);
     if (g.player.dead) return -1;
-    if (g.player.grounded) { const s = st(g); return s.x >= x0 && s.x <= x1 && s.feet <= fm ? i + 1 : -1; }
+    if (g.player.grounded) {
+      const s = st(g);
+      return s.x >= x0 && s.x <= x1 && s.feet <= fm && (!need || need(g)) ? i + 1 : -1;
+    }
   }
   return -1;
 }
 
-/** Find wait + (jump | hook+hold) that lands grounded with center in [x0,x1] and feet <= fm. */
-export function stepR(lvl, pre, x0, x1, fm = 99, { maxWait = 90 } = {}) {
+/**
+ * Find wait + (jump | grapple+hold [+ chained grapples]) that lands grounded with center in [x0,x1], feet <= fm.
+ * Grapple chains: after releasing, wait r frames and grapple again (up to `chain` grapples in the air).
+ */
+export function stepR(lvl, pre, x0, x1, fm = 99, { maxWait = 90, chain = 1, need = null } = {}) {
+  const tryFrom = (base, depth) => {
+    for (let h = 4; h <= 120; h += 4) {
+      const segs = [...base, [h, true]];
+      const g = repR(lvl, segs);
+      if (g.player.dead || g.deaths) continue;
+      const i = landR(g, x0, x1, fm, need);
+      if (i > 0) return [...segs, [i, false]];
+      if (depth > 1) {
+        for (let r = 0; r <= 30; r += 3) {
+          const g2 = repR(lvl, [...segs, [r, false]]);
+          if (g2.player.dead || g2.player.grounded) break;
+          if (!g2.assistAim().locked) continue;
+          const res = tryFrom([...segs, [r, false]], depth - 1);
+          if (res) return res;
+        }
+      }
+    }
+    return null;
+  };
   for (let w = 0; w <= maxWait; w += 3) {
     {
       const g = repR(lvl, [...pre, [w, false], [1, false, null, true]]);
-      const i = landR(g, x0, x1, fm);
+      const i = landR(g, x0, x1, fm, need);
       if (i > 0) return { pre: [...pre, [w, false], [1, false, null, true], [i, false]], how: ['jump', w] };
     }
     const g0 = repR(lvl, [...pre, [w, false]]);
     if (g0.player.dead) break;
-    const c = g0.center();
-    for (let ax = Math.ceil(camCenter(g0)); ax <= c.x + 9; ax++)
-      for (let ay = Math.floor(c.y - 9); ay <= c.y + 2; ay++) {
-        if (Math.hypot(ax - c.x, ay - c.y) > 9.5) continue;
-        for (let h = 6; h <= 120; h += 6) {
-          const aim = { x: ax + 0.01, y: ay + 0.01 };
-          const g = repR(lvl, [...pre, [w, false], [h, true, aim]]);
-          if (g.player.dead) continue;
-          const i = landR(g, x0, x1, fm);
-          if (i > 0) return { pre: [...pre, [w, false], [h, true, aim], [i, false]], how: ['hook', w, ax, ay, h] };
-        }
-      }
+    // jump then grapple from the air
+    for (const jw of [null, 6, 12, 18]) {
+      const base = jw === null ? [...pre, [w, false]] : [...pre, [w, false], [1, false, null, true], [jw, false]];
+      const gb = repR(lvl, base);
+      if (gb.player.dead || !gb.assistAim().locked) continue;
+      const res = tryFrom(base, chain);
+      if (res) return { pre: res, how: [jw === null ? 'grapple' : 'jump+grapple', w, jw] };
+    }
   }
   return null;
 }
 
-/** Tap a target (key / lever) as soon as it is tappable and `check(game)` passes 30 frames later. */
-export function scanR(lvl, pre, aim, check, maxWait = 90) {
+/** Run until `check(game)` passes after a grapple fired at the first locked frame within maxWait. */
+export function scanR(lvl, pre, check, { maxWait = 90, hold = 2 } = {}) {
   for (let n = 0; n <= maxWait; n += 2) {
     const g0 = repR(lvl, [...pre, [n, false]]);
-    if (aim.x <= camCenter(g0)) continue;
-    const p2 = [...pre, [n, false], [2, true, aim], [1, false]];
+    if (!g0.assistAim().locked) continue;
+    const p2 = [...pre, [n, false], [hold, true], [1, false]];
     if (check(repR(lvl, [...p2, [30, false]]))) return p2;
   }
   return null;

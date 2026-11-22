@@ -23,6 +23,12 @@ let runner = localStorage.getItem(MODE_KEY) !== 'classic';
 let game = makeGame(0);
 let mouseSeen = false;
 
+/** Mode-specific rules on a game instance. */
+function applyRules(g: Game) {
+  g.ceilingOnly = runner;
+  g.hookRange = runner ? C.RUNNER_HOOK_RANGE : C.HOOK_RANGE;
+}
+
 function applyMode() {
   input.runner = runner;
   document.body.classList.toggle('runner', runner);
@@ -35,7 +41,7 @@ canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') m
 
 function makeGame(i: number): Game {
   const g = new Game(parseLevel(LEVELS[i]), (s) => audio.play(s));
-  g.ceilingOnly = runner;
+  applyRules(g);
   renderer.resize();
   renderer.snapCamera(g);
   return g;
@@ -88,7 +94,7 @@ document.addEventListener('click', (e) => {
     case 'title': show('title'); break;
     case 'resume': show('play'); break;
     case 'restart-level': startLevel(levelIndex); break;
-    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); game.ceilingOnly = runner; break;
+    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); applyRules(game); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
     case 'next': startLevel(Math.min(levelIndex + 1, LEVELS.length - 1)); break;
     case 'replay': startLevel(levelIndex); break;
@@ -139,7 +145,7 @@ function frame(now: number) {
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
       while (acc >= C.STEP) {
-        const aim = renderer.screenToWorld(st.aimX, st.aimY);
+        const aim = runner ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY);
         const wasDead = game.player.dead;
         game.update(C.STEP, runner ? 1 : st.moveX, st.hookDown, pressed, aim, runner && jump);
         if (wasDead && !game.player.dead) renderer.snapCamera(game);
@@ -161,9 +167,9 @@ function frame(now: number) {
   }
 
   renderer.updateCamera(game, dt);
-  const showAim = screen === 'play' && mouseSeen && !input.touchMode;
+  const showAim = screen === 'play' && (runner || (mouseSeen && !input.touchMode));
   renderer.draw(game, {
-    aim: showAim ? renderer.screenToWorld(st.aimX, st.aimY) : null,
+    aim: !showAim ? null : runner ? game.assistAim() : renderer.screenToWorld(st.aimX, st.aimY),
     touch: input.touchMode && (screen === 'play' || screen === 'won'),
     buttons: input.buttons(),
     held: input.heldDirs(),

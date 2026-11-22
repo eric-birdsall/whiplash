@@ -18,6 +18,10 @@ export const AIR_DRAG = 0.4; // per second, fraction of horizontal speed lost wi
 
 export const HOOK_SPEED = 48;
 export const HOOK_RANGE = 9;
+// Runner mode fires at a fixed 45° up-forward, bending toward anything grabbable within the assist cone.
+export const RUNNER_HOOK_RANGE = 11;
+export const AUTO_AIM_ANGLE = Math.PI / 4;
+export const AIM_ASSIST = (14 * Math.PI) / 180; // max bend either side of 45°
 export const HOOK_RETURN_SPEED = 70;
 export const HOOK_COOLDOWN = 0.15;
 
