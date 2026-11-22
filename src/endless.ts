@@ -4,7 +4,7 @@
 
 import * as C from './config';
 import { Game, type Sfx } from './game';
-import { Tile, type Level, type Vec } from './level';
+import { Tile, type Beam, type Level, type Motion, type Ring } from './level';
 
 export const ENDLESS_H = 22;
 const START_FLAT = 14;
@@ -36,10 +36,37 @@ export const OBSTACLES = {
   // Beams hang near the top of the screen (beamAbove tiles over the takeoff surface). Widths vary; narrow
   // ones get more common with difficulty. beamAt = where the beam starts, as a fraction of the gap.
   beam: { gap: [11, 13], rise: [-2, 1], beamAbove: 8, beamLen: [2, 6], beamAt: 0.15 },
-  ring: { gap: [11, 12], rise: [-2, 0], ringAbove: 5 },
+  ring: { gap: [11, 12], rise: [-2, 0], ringAbove: 7 },
   // Two rings over one long gap: swing rope to rope (a built-in swing chain).
-  chain: { gap: [19, 21], rise: [-2, 0], ringAbove: 5, ring2At: 0.68 },
+  chain: { gap: [19, 21], rise: [-2, 0], ringAbove: 6.5, ring2At: 0.68 },
 };
+
+/**
+ * How rings and beams move (full size; scaled by MOVE_MIN..1 with difficulty). Each one picks a direction:
+ * rings bob up and down or slide side to side around their home; beams slide side to side, or sink
+ * below their usual height and come back (never higher, so they stay on screen).
+ */
+export const MOTION = {
+  period: [2.4, 3.4], // seconds per full back-and-forth
+  ringBob: 1.2, // ± tiles up/down
+  ringSlide: 1.6, // ± tiles side to side
+  ringBobChance: 0.6,
+  beamSlide: 2, // ± tiles side to side
+  beamSink: 1.6, // sinks this far below its usual height at the bottom of its travel
+  beamSlideChance: 0.6,
+};
+const MOVE_MIN = 0.6;
+
+/** Generator options (the checker forces these). */
+export type ChunkParams = { gap?: number; rise?: number; plat?: number; beamLen?: number; move?: number; phase?: number; vertical?: boolean };
+
+/** Chunk-relative rings and beams → world ones at column x0. */
+export function place(chunk: { rings: Ring[]; beams: Beam[] }, x0: number) {
+  return {
+    rings: chunk.rings.map((r) => ({ ...r, x: r.x + x0, bx: r.bx + x0 })),
+    beams: chunk.beams.map((b) => ({ ...b, x: b.x + x0, bx: b.bx + x0 })),
+  };
+}
 
 export class EndlessGen {
   private rand: () => number;
@@ -85,9 +112,21 @@ export class EndlessGen {
    * One platform followed by one obstacle. speed scales gap widths; d (0..1) shortens platforms.
    * `force` picks the obstacle (used by the checker).
    */
-  next(speed: number, d: number, force?: ObstacleKind, params?: { gap?: number; rise?: number; plat?: number; beamLen?: number }) {
+  next(speed: number, d: number, force?: ObstacleKind, params?: ChunkParams) {
     const cols: Uint8Array[] = [];
-    const rings: Vec[] = [];
+    const rings: Ring[] = [];
+    const beams: Beam[] = [];
+    const scale = params?.move ?? MOVE_MIN + (1 - MOVE_MIN) * d;
+    const motion = (ax: number, ay: number): Motion | undefined => {
+      if (scale <= 0 || (!ax && !ay)) return undefined;
+      const [p0, p1] = MOTION.period;
+      return { ax: ax * scale, ay: ay * scale, period: p0 + this.rand() * (p1 - p0), phase: params?.phase ?? this.rand() * Math.PI * 2 };
+    };
+    const vertical = (chance: number) => params?.vertical ?? this.rand() < chance;
+    const ring = (x: number, y: number) => {
+      const m = vertical(MOTION.ringBobChance) ? motion(0, MOTION.ringBob) : motion(MOTION.ringSlide, 0);
+      rings.push({ x, y, bx: x, by: y, m });
+    };
     const k = speed / C.RUN_SPEED;
     const platLen = params?.plat ?? this.ri(Math.round(7 - 2 * d), Math.round(13 - 5 * d));
     for (let i = 0; i < platLen; i++) cols.push(this.slab(this.gy));
@@ -115,19 +154,21 @@ export class EndlessGen {
       const [lo, hi] = o.beamLen ?? [6, 6];
       // Skewed toward narrow as difficulty rises.
       const len = params?.beamLen ?? lo + Math.floor(Math.pow(this.rand(), 1 + 2 * d) * (hi - lo + 1));
-      for (let i = 0; i < len; i++) {
-        const ci = from + i;
-        while (cols.length <= ci) cols.push(this.slab(takeoffGy - rise));
-        cols[ci][row] = Tile.Wood;
-      }
+      while (cols.length < from + len) cols.push(this.slab(takeoffGy - rise));
+      // Sinking beams sit half their travel lower and swing ±half: the top of the travel is the usual height.
+      const slide = !vertical(1 - MOTION.beamSlideChance);
+      const m = slide ? motion(MOTION.beamSlide, 0) : motion(0, MOTION.beamSink / 2);
+      const y = row + (m ? m.ay : 0);
+      beams.push({ x: from, y, w: len, h: 1, bx: from, by: y, m, dx: 0, dy: 0 });
     }
     this.gy -= rise;
-    if (kind === 'ring') rings.push({ x: startX + gap * 0.45, y: takeoffGy - (o.ringAbove ?? 5) + 0.5 }); // x relative to chunk start
+    if (kind === 'ring') ring(startX + gap * 0.45, takeoffGy - (o.ringAbove ?? 5) + 0.5); // x relative to chunk start
     if (kind === 'chain') {
       const ry = takeoffGy - (o.ringAbove ?? 5) + 0.5;
-      rings.push({ x: startX + gap * 0.27, y: ry }, { x: startX + gap * (o.ring2At ?? 0.68), y: ry });
+      ring(startX + gap * 0.27, ry);
+      ring(startX + gap * (o.ring2At ?? 0.68), ry);
     }
-    return { cols, rings, kind, gap, rise };
+    return { cols, rings, beams, kind, gap, rise };
   }
 }
 
@@ -147,7 +188,7 @@ export class EndlessRun {
       name: 'Endless',
       hint: 'Tap left to jump (again in the air to double jump). Tap right to grapple.',
       w: cols.length, h: ENDLESS_H, tiles: new Uint8Array(cols.length * ENDLESS_H),
-      start: { x: 4, y: this.gen.gy }, rings: [],
+      start: { x: 4, y: this.gen.gy }, rings: [], beams: [],
     };
     for (let x = 0; x < cols.length; x++) for (let y = 0; y < ENDLESS_H; y++) level.tiles[y * cols.length + x] = cols[x][y];
     this.game = new Game(level, sfx);
@@ -184,8 +225,8 @@ export class EndlessRun {
       if (this.lastKinds.length >= 2 && this.lastKinds.every((k) => k === kind)) kind = this.gen.pick(this.difficulty);
       const chunk = this.gen.next(g.runSpeed, this.difficulty, kind);
       this.lastKinds = [...this.lastKinds.slice(-1), chunk.kind];
-      const x0 = g.w;
-      g.appendColumns(chunk.cols, chunk.rings.map((r) => ({ x: r.x + x0, y: r.y })));
+      const placed = place(chunk, g.w);
+      g.appendColumns(chunk.cols, placed.rings, placed.beams);
     }
   }
 

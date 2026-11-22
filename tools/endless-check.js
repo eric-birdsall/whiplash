@@ -1,29 +1,30 @@
 // Dev-only: checks every Endless obstacle variant is beatable and measures its timing window.
 // In the dev server console:  (await import('/tools/endless-check.js')).checkAll()
 import { Game } from '/src/game.ts';
-import { EndlessGen, ENDLESS_H, OBSTACLES } from '/src/endless.ts';
+import { EndlessGen, ENDLESS_H, OBSTACLES, place } from '/src/endless.ts';
 import * as C from '/src/config.ts';
 
 const DT = 1 / 60;
 
 /** A test strip: runway, one forced obstacle, landing runway. Returns { game, gapStart, gapEnd }. */
-export function strip(kind, { gap, rise, beamLen, speed = C.RUN_SPEED, seed = 1 } = {}) {
+// move: motion size (0 = still, 1 = full size, as at top difficulty). phase: where in its motion each
+// ring / beam starts (radians). vertical: force bobbing/sinking (true) or sliding (false).
+export function strip(kind, { gap, rise, beamLen, speed = C.RUN_SPEED, seed = 1, move = 0, phase = 0, vertical } = {}) {
   const gen = new EndlessGen(seed);
   gen.gy = 14;
   const cols = [];
-  const rings = [];
   for (let i = 0; i < 14; i++) cols.push(gen.slab(gen.gy));
   const x0 = cols.length;
-  const ch = gen.next(speed, 0, kind, { gap, rise, beamLen, plat: 6 });
+  const ch = gen.next(speed, 0, kind, { gap, rise, beamLen, plat: 6, move, phase, vertical });
   cols.push(...ch.cols);
-  ch.rings.forEach((r) => rings.push({ x: r.x + x0, y: r.y }));
+  const { rings, beams } = place(ch, x0);
   for (let i = 0; i < 24; i++) cols.push(gen.slab(gen.gy));
   const w = cols.length;
   const tiles = new Uint8Array(w * ENDLESS_H);
   for (let x = 0; x < w; x++) for (let y = 0; y < ENDLESS_H; y++) tiles[y * w + x] = cols[x][y];
-  const level = { name: 'check', w, h: ENDLESS_H, tiles, start: { x: 3, y: 14 }, rings };
+  const level = { name: 'check', w, h: ENDLESS_H, tiles, start: { x: 3, y: 14 }, rings, beams };
   const mk = () => {
-    const g = new Game({ ...level, rings: rings.slice() });
+    const g = new Game({ ...level, rings: rings.map((r) => ({ ...r })), beams: beams.map((b) => ({ ...b })) });
     g.runSpeed = speed;
     return g;
   };
@@ -108,6 +109,29 @@ export function checkAll({ speeds = [C.RUN_SPEED, C.RUN_SPEED + 3.5], kinds = Ob
       const r = window(kind, { gap, rise, speed, beamLen });
       const w = beamLen ? ` w${beamLen}` : '';
       out.push(`${kind} gap${gap}→${r.gap} rise${rise}${w} v${speed}: ${r.window}f ${JSON.stringify(r.how)}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Moving rings and beams: each variant at full motion, from several starting phases and both directions.
+ * Reports the worst (smallest) window over the phases. A 0 means some phase can't be beaten.
+ */
+export function checkMoving({ speeds = [C.RUN_SPEED, C.RUN_SPEED + 3.5], kinds = ['ring', 'beam', 'chain'], phases = 6, move = 1 } = {}) {
+  const out = [];
+  for (const kind of kinds) {
+    const o = OBSTACLES[kind];
+    const lens = o.beamLen ? [o.beamLen[0], o.beamLen[1]] : [undefined];
+    for (const speed of speeds) for (const gap of o.gap) for (const rise of o.rise) for (const beamLen of lens) for (const vertical of [true, false]) {
+      let worst = Infinity, worstPhase = 0;
+      for (let i = 0; i < phases; i++) {
+        const phase = (i / phases) * Math.PI * 2;
+        const r = window(kind, { gap, rise, speed, beamLen, move, phase, vertical });
+        if (r.window < worst) { worst = r.window; worstPhase = i; }
+      }
+      const w = beamLen ? ` w${beamLen}` : '';
+      out.push(`${kind} gap${gap} rise${rise}${w} v${speed} ${vertical ? 'vert' : 'side'}: worst ${worst}f (phase ${worstPhase}/${phases})`);
     }
   }
   return out;

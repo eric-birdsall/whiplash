@@ -1,6 +1,6 @@
 import * as C from './config';
-import { Level, Tile, Vec } from './level';
-import { Box, Grid, boxHitsGrid, moveAxis, raycastGrid, rayCircle } from './physics';
+import { Beam, Level, Ring, Tile, Vec, motionOffset } from './level';
+import { Box, Grid, boxHitsGrid, moveAxis, overlaps, rayBox, raycastGrid, rayCircle } from './physics';
 
 export const MAT_WOOD = 1;
 export const MAT_STONE = 3;
@@ -15,8 +15,10 @@ export interface Player extends Box {
 
 export type Hook =
   | { kind: 'idle' }
-  | { kind: 'flying'; x: number; y: number; dx: number; dy: number; dist: number; held: boolean }
-  | { kind: 'anchored'; x: number; y: number; len: number; ring: boolean }
+  // target = the ring or beam spot it locked onto when fired: they move, so the hook homes in on it.
+  | { kind: 'flying'; x: number; y: number; dx: number; dy: number; dist: number; held: boolean; target?: AimTarget }
+  // on = the ring or beam it caught (it moves, so the anchor follows), at offset (ox, oy) from its x, y.
+  | { kind: 'anchored'; x: number; y: number; len: number; ring: boolean; on?: Ring | Beam; ox: number; oy: number }
   | { kind: 'returning'; x: number; y: number };
 
 export interface Particle {
@@ -25,11 +27,14 @@ export interface Particle {
 
 export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain';
 
+/** A locked spot on a mover: (ox, oy) from its x, y (a ring's centre, or a point on a beam's underside). */
+export type AimTarget = { on: Ring | Beam; ox: number; oy: number };
+
 /** Floating text in world space ("PERFECT", "×2", "+10 m"). */
 export interface Popup { text: string; x: number; y: number; life: number; max: number; color: string; big: boolean }
 
 /** What a hook ray hits first: something to hang from ('wood' underside or 'ring'), or a 'solid' it bounces off. */
-export type HookHit = { t: number; what: 'wood' | 'ring' | 'solid'; rx?: number; ry?: number };
+export type HookHit = { t: number; what: 'wood' | 'ring' | 'solid'; rx?: number; ry?: number; on?: Ring | Beam };
 
 /**
  * The Endless runner: always running right, jump + double jump, and a fixed 60° grapple with aim
@@ -82,13 +87,15 @@ export class Game implements Grid {
       x: level.start.x - C.PLAYER_W / 2, y: level.start.y - C.PLAYER_H - 0.01, w: C.PLAYER_W, h: C.PLAYER_H,
       vx: 0, vy: 0, grounded: false, facing: 1, dead: false,
     };
+    this.level.beams ??= [];
+    this.updateMovers(true);
   }
 
   /**
    * Append columns on the right. Each column is h tile values, top to bottom.
    * Rings far behind the player are dropped so hook raycasts stay cheap.
    */
-  appendColumns(cols: Uint8Array[], rings: Vec[]) {
+  appendColumns(cols: Uint8Array[], rings: Ring[], beams: Beam[] = []) {
     const oldW = this.w, h = this.h, nw = oldW + cols.length;
     const t = new Uint8Array(nw * h);
     for (let y = 0; y < h; y++) {
@@ -99,6 +106,51 @@ export class Game implements Grid {
     this.level.w = this.w = nw;
     const cutoff = this.player.x - 40;
     this.level.rings = this.level.rings.filter((r) => r.x > cutoff).concat(rings);
+    this.level.beams = this.level.beams.filter((b) => b.x + b.w > cutoff).concat(beams);
+    this.updateMovers(true);
+  }
+
+  /** Beams near a box (the only ones collision needs to look at). */
+  private beamsNear(b: Box): Beam[] {
+    return this.level.beams.filter((o) => o.x < b.x + b.w + 3 && o.x + o.w > b.x - 3);
+  }
+
+  /**
+   * Move rings and beams to where they are at the current time. A hero standing on a beam rides it; a
+   * beam moving into the hero shoves them out of the way. `place` just sets positions (no carrying).
+   */
+  private updateMovers(place = false) {
+    const t = this.time;
+    for (const r of this.level.rings) {
+      const o = motionOffset(r.m, t);
+      r.x = r.bx + o.x; r.y = r.by + o.y;
+    }
+    const p = this.player;
+    for (const b of this.level.beams) {
+      const o = motionOffset(b.m, t);
+      const nx = b.bx + o.x, ny = b.by + o.y;
+      b.dx = place ? 0 : nx - b.x; b.dy = place ? 0 : ny - b.y;
+      const riding = !place && !p.dead && p.vy >= 0 && Math.abs(p.y + p.h - b.y) < 0.06 && p.x < b.x + b.w && p.x + p.w > b.x;
+      b.x = nx; b.y = ny;
+      if (place || !b.m) continue;
+      if (riding) {
+        const moved = { x: p.x + b.dx, y: p.y + b.dy, w: p.w, h: p.h };
+        if (!boxHitsGrid(moved, this)) { p.x = moved.x; p.y = moved.y; }
+      }
+      if (overlaps(p, b)) {
+        // Shove out along the shallowest side.
+        const outs: [number, 'x' | 'y'][] = [
+          [b.x - (p.x + p.w), 'x'], [b.x + b.w - p.x, 'x'], [b.y - (p.y + p.h), 'y'], [b.y + b.h - p.y, 'y'],
+        ];
+        outs.sort((a, c) => Math.abs(a[0]) - Math.abs(c[0]));
+        const [d, axis] = outs[0];
+        p[axis] += d + Math.sign(d) * 1e-4;
+        if (axis === 'y' && d > 0) p.vy = Math.max(p.vy, b.dy / C.STEP);
+      }
+    }
+    // A rope caught on something that moves follows it.
+    const h = this.hook;
+    if (h.kind === 'anchored' && h.on) { h.x = h.on.x + h.ox; h.y = h.on.y + h.oy; }
   }
 
   // ---------- Grid ----------
@@ -134,7 +186,8 @@ export class Game implements Grid {
   }
 
   private onGround(b: Box): boolean {
-    return boxHitsGrid({ x: b.x, y: b.y + b.h, w: b.w, h: 0.04 }, this);
+    const feet = { x: b.x, y: b.y + b.h, w: b.w, h: 0.04 };
+    return boxHitsGrid(feet, this) || this.level.beams.some((o) => overlaps(feet, o));
   }
 
   private kill(reason: string) {
@@ -155,6 +208,7 @@ export class Game implements Grid {
     const p = this.player;
     if (p.dead) return;
     this.time += dt;
+    this.updateMovers();
 
     this.cooldown = Math.max(0, this.cooldown - dt);
     // Forgiving grapple: remember a tap while it's held and fire once the hook is ready. While
@@ -183,30 +237,35 @@ export class Game implements Grid {
    * closest angle that hits something to hang from; rings beat wood. Returns a world point along the
    * chosen direction, plus whether it locks onto something.
    */
-  assistAim(): { x: number; y: number; locked: boolean } {
+  assistAim(): { x: number; y: number; locked: boolean; target?: AimTarget } {
     const c = this.center();
     const stepA = (1.5 * Math.PI) / 180;
-    let best: { a: number; pri: number } | null = null;
+    let best: { a: number; pri: number; target?: AimTarget } | null = null;
     for (let k = 0; k * stepA <= C.AIM_ASSIST + 1e-6; k++) {
       for (const s of k === 0 ? [1] : [1, -1]) {
         const a = this.aimAngle + s * k * stepA;
         const hit = this.castHook(c.x, c.y, Math.cos(a), -Math.sin(a), this.hookRange);
         if (!hit || hit.what === 'solid') continue;
         const pri = hit.what === 'ring' ? 2 : 1;
-        if (!best || pri > best.pri) best = { a, pri };
+        if (best && pri <= best.pri) continue;
+        const on = hit.on;
+        const target = on && { on, ox: c.x + Math.cos(a) * hit.t - on.x, oy: c.y - Math.sin(a) * hit.t - on.y };
+        if (target && hit.what === 'ring') { target.ox = 0; target.oy = 0; }
+        if (target && 'w' in target.on) target.ox = Math.min(target.on.w - 0.15, Math.max(0.15, target.ox));
+        best = { a, pri, target };
       }
     }
     const a = best ? best.a : this.aimAngle;
-    return { x: c.x + Math.cos(a) * 5, y: c.y - Math.sin(a) * 5, locked: !!best };
+    return { x: c.x + Math.cos(a) * 5, y: c.y - Math.sin(a) * 5, locked: !!best, target: best?.target };
   }
 
-  private fire(aim: Vec) {
+  private fire(aim: Vec & { target?: AimTarget }) {
     const c = this.center();
     let dx = aim.x - c.x, dy = aim.y - c.y;
     const len = Math.hypot(dx, dy);
     if (len < 0.01) return;
     dx /= len; dy /= len;
-    this.hook = { kind: 'flying', x: c.x, y: c.y, dx, dy, dist: 0, held: true };
+    this.hook = { kind: 'flying', x: c.x, y: c.y, dx, dy, dist: 0, held: true, target: aim.target };
     this.sfx('fire');
   }
 
@@ -216,6 +275,12 @@ export class Game implements Grid {
     switch (h.kind) {
       case 'flying': {
         if (!hookDown) h.held = false;
+        if (h.target) {
+          const { on, ox, oy } = h.target;
+          // Aim a hair above a beam's underside so the ray still enters through the bottom face.
+          const tx = on.x + ox - h.x, ty = on.y + oy - ('w' in on ? 0.02 : 0) - h.y, td = Math.hypot(tx, ty);
+          if (td > 1e-3) { h.dx = tx / td; h.dy = ty / td; }
+        }
         const step = Math.min(C.HOOK_SPEED * dt, this.hookRange - h.dist);
         const hit = this.castHook(h.x, h.y, h.dx, h.dy, step);
         if (!hit) {
@@ -235,7 +300,8 @@ export class Game implements Grid {
         const ring = hit.what === 'ring';
         const ax = ring ? hit.rx! : hx, ay = ring ? hit.ry! : hy;
         const len = Math.max(C.ROPE_MIN, Math.hypot(c.x - ax, c.y - ay));
-        this.hook = { kind: 'anchored', x: ax, y: ay, len, ring };
+        const on = hit.on;
+        this.hook = { kind: 'anchored', x: ax, y: ay, len, ring, on, ox: on ? ax - on.x : 0, oy: on ? ay - on.y : 0 };
         this.burst(ax, ay, 6, ring ? '#7df0ff' : '#e0a464', 4, 6);
         this.sfx('attach');
         this.addLink(null);
@@ -307,7 +373,15 @@ export class Game implements Grid {
     if (g) best = { t: g.t, what: g.material === MAT_WOOD && g.ny > 0 ? 'wood' : 'solid' };
     for (const r of this.level.rings) {
       const t = rayCircle(ox, oy, dx, dy, maxT, r.x, r.y, C.RING_RADIUS + 0.12);
-      if (t !== null && (!best || t < best.t)) best = { t, what: 'ring', rx: r.x, ry: r.y };
+      if (t !== null && (!best || t < best.t)) best = { t, what: 'ring', rx: r.x, ry: r.y, on: r };
+    }
+    for (const b of this.level.beams) {
+      if (b.x > ox + maxT + 1 || b.x + b.w < ox - maxT - 1) continue;
+      const t = rayBox(ox, oy, dx, dy, maxT, b);
+      if (t === null || (best && t >= best.t)) continue;
+      // Only a ray coming up through the bottom face grips.
+      const under = t > 0 && dy < 0 && Math.abs(oy + dy * t - (b.y + b.h)) < 1e-3;
+      best = { t, what: under ? 'wood' : 'solid', on: under ? b : undefined };
     }
     return best;
   }
@@ -373,15 +447,16 @@ export class Game implements Grid {
     }
 
     const sx = p.x, sy = p.y;
-    if (moveAxis(p, 'x', p.vx * dt, this, [])) {
+    const near = this.beamsNear(p);
+    if (moveAxis(p, 'x', p.vx * dt, this, near)) {
       // Auto step-up over tiny lips, never a full tile.
       let stepped = false;
       if (p.grounded) {
         for (const lift of [0.1, 0.2, 0.3]) {
           const t = { x: sx, y: sy - lift, w: p.w, h: p.h };
-          if (boxHitsGrid(t, this)) break;
+          if (boxHitsGrid(t, this) || near.some((o) => overlaps(t, o))) break;
           const before = t.x;
-          moveAxis(t, 'x', p.vx * dt, this, []);
+          moveAxis(t, 'x', p.vx * dt, this, near);
           if (Math.abs(t.x - before) > Math.abs(p.x - sx) + 1e-3) {
             p.x = t.x; p.y = t.y; stepped = true;
             break;
@@ -390,7 +465,7 @@ export class Game implements Grid {
       }
       if (!stepped) { p.vx = 0; this.blockedX = true; }
     }
-    if (moveAxis(p, 'y', p.vy * dt, this, [])) p.vy = 0;
+    if (moveAxis(p, 'y', p.vy * dt, this, near)) p.vy = 0;
     const wasGrounded = p.grounded;
     p.grounded = this.onGround(p);
     if (p.grounded && p.vy > 0) p.vy = 0;

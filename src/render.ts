@@ -1,6 +1,6 @@
 import * as C from './config';
 import { Game } from './game';
-import { Tile, Vec } from './level';
+import { Motion, Tile, Vec } from './level';
 import { Pose, computePose, drawHero } from './hero';
 import { CLAW_BACK, drawClaw } from './claw';
 
@@ -93,6 +93,7 @@ export class Renderer {
     ctx.lineCap = 'round';
 
     this.drawTiles(g);
+    this.drawBeams(g);
     this.drawRings(g);
     if (opts.aim && !g.player.dead) this.drawAim(g, opts.aim);
     const pose = computePose(g, opts.aim);
@@ -205,10 +206,56 @@ export class Renderer {
     if (open) { ctx.fillStyle = COL.stoneTop; ctx.fillRect(tx, ty, 1.01, 0.12); }
   }
 
+  /** A faint dotted line along a mover's path, from (x, y) at its home offset (so you can read where it goes). */
+  private drawTrack(m: Motion | undefined, x: number, y: number) {
+    if (!m) return;
+    const { ctx } = this;
+    ctx.strokeStyle = 'rgba(200,220,255,0.16)';
+    ctx.lineWidth = 0.06;
+    ctx.setLineDash([0.08, 0.2]);
+    ctx.beginPath();
+    ctx.moveTo(x - m.ax, y - m.ay);
+    ctx.lineTo(x + m.ax, y + m.ay);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = 'rgba(200,220,255,0.22)';
+      ctx.beginPath();
+      ctx.arc(x + s * m.ax, y + s * m.ay, 0.07, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /** Hanging wood beams (they move, so they're drawn at fractional positions, not as tiles). */
+  private drawBeams(g: Game) {
+    const { ctx } = this;
+    for (const b of g.level.beams) {
+      if (b.x + b.w < this.camX - 3 || b.x > this.camX + C.VIEW_W + 3) continue;
+      this.drawTrack(b.m, b.bx + b.w / 2, b.by + b.h / 2);
+      ctx.fillStyle = COL.wood;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = COL.woodLine;
+      ctx.lineWidth = 0.05;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y + 0.5); ctx.lineTo(b.x + b.w, b.y + 0.5);
+      for (let i = 0; i < b.w; i++) {
+        const off = i % 2 ? 0.5 : 0;
+        ctx.moveTo(b.x + i + off + 0.25, b.y); ctx.lineTo(b.x + i + off + 0.25, b.y + 0.5);
+        ctx.moveTo(b.x + i + 0.75 - off * 0.5, b.y + 0.5); ctx.lineTo(b.x + i + 0.75 - off * 0.5, b.y + 1);
+      }
+      ctx.stroke();
+      ctx.fillStyle = COL.woodTop;
+      ctx.fillRect(b.x, b.y, b.w, 0.14);
+      // The grab surface: a bright lip along the underside.
+      ctx.fillRect(b.x, b.y + b.h - 0.14, b.w, 0.14);
+    }
+  }
+
   private drawRings(g: Game) {
     const { ctx } = this;
     for (const r of g.level.rings) {
       if (r.x < this.camX - 2 || r.x > this.camX + C.VIEW_W + 2) continue;
+      this.drawTrack(r.m, r.bx, r.by);
       ctx.strokeStyle = 'rgba(125,240,255,0.25)';
       ctx.lineWidth = 0.22;
       ctx.beginPath();

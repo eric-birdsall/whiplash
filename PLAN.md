@@ -32,7 +32,8 @@ at the bottom corners. Portrait shows a "rotate your device" notice.
 - **Double jump:** one extra jump in the air, refreshed on landing or when the grapple catches. The hero does a front tuck (one
   forward spin over 0.5 s; cosmetic, cancelled by landing or firing the grapple).
 - **Grapple:** no aiming. It always fires up and forward at 60°; if that line would miss, it bends up
-  to ±14° toward the nearest-angle thing it can hang from. Rings beat wood. Range 16.5 tiles.
+  to ±14° toward the nearest-angle thing it can hang from. Rings beat wood. Range 16.5 tiles. A locked shot homes in
+  on its (moving) target.
   - Only the **underside of wood** catches it (stone, and the tops and sides of wood, bounce it off).
     Rings work from any angle.
   - Hold to hang while the rope reels in; release to fling. Hanging uses lower gravity (20) for a
@@ -56,13 +57,19 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 
 | Obstacle | Gap (tiles at base speed) | Notes |
 |---|---|---|
-| **beam** | 11–13 | wood beam 8 tiles above the takeoff (near the top of the screen), 2–6 tiles wide (narrow ones more common as difficulty rises); needs the grapple |
-| **ring** | 11–12 | ring ~5 tiles above the takeoff; needs the grapple |
+| **beam** | 11–13 | moving wood beam 8 tiles above the takeoff (near the top of the screen), 2–6 tiles wide (narrow ones more common as difficulty rises); needs the grapple |
+| **ring** | 11–12 | ring ~7 tiles above the takeoff; needs the grapple |
 | **jump** | 2–4 | |
 | **double** | 6–8 | |
 | **step** | 0 | a 1–3 tile ledge to hop up (3 needs the double jump) |
-| **chain** | 19–21 | two rings ~5 tiles above the takeoff, at 27% and 68% of the gap: swing rope to rope. From ~90 m |
+| **chain** | 19–21 | two rings ~6.5 tiles above the takeoff, at 27% and 68% of the gap: swing rope to rope. From ~90 m |
 
+- **Everything you grapple moves** (`MOTION` in `src/endless.ts`): a smooth back-and-forth every 2.4–3.4 s from a
+  random starting point. Rings bob up and down ±1.2 tiles (60%) or slide side to side ±1.6. Beams slide side to side
+  ±2 (60%) or sink up to 1.6 tiles below their usual height and come back (never higher, so they stay on screen).
+  Motion starts at 60% of that size and reaches full size at full difficulty. A faint dotted line shows each one's path.
+  A rope that catches follows its anchor; you can ride on top of a beam, and a beam moving into you shoves you aside.
+  Once the grapple locks on, the hook homes in on that spot as it flies, so a moving target can't dodge a locked shot.
 - Gaps scale with speed; ledges move up to 1 up or 3 down.
 - The first gap is always a beam (~25 m in). Beams are the most common obstacle; rings appear from ~45 m.
   Platforms shorten as difficulty rises (full difficulty at 1,500 m). No three identical obstacles in a row.
@@ -71,9 +78,12 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 **Checker (dev only):** `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
 and top speed, and measures the timing window (frames where some jump / double jump / grapple clears it).
 Beams are checked at their narrowest and widest. Every variant is beatable; the tightest is 30 frames (~0.5 s, an
-11-tile double-jump gap, or a 21-tile chain, at top speed). Rings ~30 frames and beams 52+ at top speed. Chains are checked
+11-tile double-jump gap at top speed). Still rings 36+ frames and beams 52+ at top speed. `checkMoving()` checks rings,
+beams and chains at full motion from 8 starting points in their motion (both directions) and reports the worst: at top
+speed rings 31+, beams 28+, chains 23+ frames (base speed: 35+, 52+, 86+). Chains are checked
 with two-swing inputs only, and take about 30 s. At base speed a great single swing can sometimes (~5% of tries) skip a chain ring. In the dev page's console:
-`(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5 })`.
+`(await import('/tools/endless-check.js')).window('beam', { gap: 12, rise: 1, speed: 10.5, move: 1, phase: 0 })`.
+The full moving sweep is too slow for the browser console; bundle the checker with esbuild and run it in Node.
 `window.__whiplash` (dev builds only) exposes the current run for debugging.
 
 ## Look
@@ -111,8 +121,8 @@ src/
   endless.ts     course generator (EndlessGen) and run controller (EndlessRun)
   game.ts        simulation: running, jumps, grapple, rope, fail checks
   physics.ts     AABB vs tile grid, raycasts
-  level.ts       tile types and world data
-  render.ts      camera, tiles, rings, aim guide, rope + claw, HUD, touch zones
+  level.ts       tile types, world data, moving rings and beams
+  render.ts      camera, tiles, beams, rings, motion tracks, aim guide, rope + claw, HUD, touch zones
   hero.ts        the commando: pose and drawing
   claw.ts        the arcade-crane claw
   input.ts       keyboard / mouse / touch → InputState
