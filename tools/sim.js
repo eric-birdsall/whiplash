@@ -153,7 +153,7 @@ export function chain(lvl, prefixSteps, targets, land) {
 // ---------- Runner mode (auto-run right, jump, ceiling-only, fixed 45° auto-aim) ----------
 // Segments: [frames, hookHeld, _, jumpOnFirstFrame?]. moveX is always 1, aim is always game.assistAim().
 
-export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; g.hookRange = 11; return g; };
+export const mkR = (i) => { const g = mk(i); g.ceilingOnly = true; g.hookRange = 11; g.wallKills = true; return g; };
 
 export function repR(lvl, segs) {
   const g = mkR(lvl);
@@ -228,3 +228,135 @@ export function scanR(lvl, pre, check, { maxWait = 90, hold = 2 } = {}) {
   }
   return null;
 }
+
+// ---------- Runner audit: sloppy random players, death hotspots and softlocks ----------
+
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/**
+ * Plays a level many times with a random "sloppy" player: grapples at random moments while a target is
+ * locked, holds a random time, jumps at random. Deaths respawn at checkpoints as in the game.
+ * Reports deaths per 2-tile bin with reasons, softlocks (alive, no progress for 6 s), and completions.
+ */
+export function auditR(lvl, { runs = 40, seconds = 90, seed = 1, fire = 0.05, jump = 0.02 } = {}) {
+  const deaths = {}, softlocks = {};
+  let completions = 0;
+  const times = [];
+  for (let r = 0; r < runs; r++) {
+    const rand = rng(seed + r * 7919);
+    const g = mkR(lvl);
+    let hold = 0, bestX = -1, anchorY = 0, lastProgress = 0, lastDeaths = 0;
+    for (let f = 0; f < seconds * 60 && !g.completed; f++) {
+      const aim = g.assistAim();
+      let pressed = false, jp = false;
+      if (hold > 0) hold--;
+      else if (g.hook.kind === 'idle' && aim.locked && rand() < fire) { hold = 6 + Math.floor(rand() * 90); pressed = true; }
+      if (g.player.grounded && rand() < jump) jp = true;
+      g.update(DT, 1, hold > 0, pressed, aim, jp);
+      if (g.deaths !== lastDeaths) {
+        lastDeaths = g.deaths;
+        const d = g.lastDeath, bin = Math.floor(d.x / 2) * 2;
+        const k = `${bin}-${bin + 2}`;
+        (deaths[k] ??= { n: 0 })[d.reason] = (deaths[k][d.reason] || 0) + 1;
+        deaths[k].n++;
+        lastProgress = f;
+      }
+      // Softlock = alive but hasn't moved half a tile (any direction) for 6 s.
+      const x = g.player.x, y = g.player.y;
+      if (bestX < 0 || Math.hypot(x - bestX, y - anchorY) > 0.5) { bestX = x; anchorY = y; lastProgress = f; }
+      if (!g.player.dead && f - lastProgress > 360) {
+        const bin = Math.floor((x + g.player.w / 2) / 2) * 2;
+        softlocks[`${bin}-${bin + 2}`] = (softlocks[`${bin}-${bin + 2}`] || 0) + 1;
+        break;
+      }
+    }
+    if (g.completed) { completions++; times.push(+g.time.toFixed(1)); }
+  }
+  const hot = Object.entries(deaths).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  return { completions: `${completions}/${runs}`, times, softlocks, hotspots: hot };
+}
+
+/**
+ * Timing forgiveness at one decision point: for each wait frame 0..maxWait after `pre`, can some single
+ * action (jump, grapple+hold, or jump then grapple) land in [x0,x1] with feet <= fm (and pass `need`)?
+ * Returns the good frames as ranges, e.g. [[12, 27]] = a 16-frame (0.27 s) window.
+ */
+export function windowR(lvl, pre, x0, x1, fm = 99, { maxWait = 90, need = null } = {}) {
+  const ok = [];
+  for (let w = 0; w <= maxWait; w++) {
+    let good = false;
+    const g0 = repR(lvl, [...pre, [w, false]]);
+    if (g0.player.dead || g0.deaths) break;
+    {
+      const g = repR(lvl, [...pre, [w, false], [1, false, null, true]]);
+      if (landR(g, x0, x1, fm, need) > 0) good = true;
+    }
+    if (!good && g0.assistAim().locked)
+      for (let h = 4; h <= 120 && !good; h += 4) {
+        const g = repR(lvl, [...pre, [w, false], [h, true]]);
+        if (!g.player.dead && !g.deaths && landR(g, x0, x1, fm, need) > 0) good = true;
+      }
+    if (good) ok.push(w);
+  }
+  const ranges = [];
+  for (const w of ok) { const r = ranges[ranges.length - 1]; if (r && w === r[1] + 1) r[1] = w; else ranges.push([w, w]); }
+  return ranges;
+}
+
+/**
+ * Walk a route and measure forgiveness at each step. Steps:
+ *   [x0, x1, feetMax, opts?]  land there via the middle of the widest timing window
+ *   { grab: check }           fire at the middle of the widest window where check(game) passes 30 frames later
+ * Returns per-step { window: frames in the widest range, ranges } and whether the level finished.
+ */
+export function routeWindows(lvl, steps, { maxWait = 120 } = {}) {
+  let pre = [];
+  const report = [];
+  for (const s of steps) {
+    if (s.grab) {
+      const good = [];
+      for (let w = 0; w <= maxWait; w++) {
+        const g0 = repR(lvl, [...pre, [w, false]]);
+        if (g0.player.dead || g0.deaths) break;
+        if (!g0.assistAim().locked) continue;
+        if (s.grab(repR(lvl, [...pre, [w, false], [2, true], [30, false]]))) good.push(w);
+      }
+      const ranges = [];
+      for (const w of good) { const r = ranges[ranges.length - 1]; if (r && w === r[1] + 1) r[1] = w; else ranges.push([w, w]); }
+      if (!ranges.length) { report.push({ step: 'grab', window: 0 }); return { ok: false, report }; }
+      const best = ranges.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+      const w = Math.floor((best[0] + best[1]) / 2);
+      pre = [...pre, [w, false], [2, true], [1, false]];
+      report.push({ step: 'grab', window: best[1] - best[0] + 1, ranges });
+      continue;
+    }
+    const [x0, x1, fm, opts = {}] = s;
+    const ranges = windowR(lvl, pre, x0, x1, fm, { maxWait, need: opts.need });
+    if (!ranges.length) {
+      // fall back to multi-grapple chains (rings) found by stepR
+      const r = stepR(lvl, pre, x0, x1, fm, { chain: 3, need: opts.need, maxWait });
+      if (!r) { report.push({ step: [x0, x1], window: 0, at: st(repR(lvl, pre)) }); return { ok: false, report }; }
+      pre = r.pre;
+      report.push({ step: [x0, x1], window: 'chain', how: r.how });
+      continue;
+    }
+    const best = ranges.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+    const w = Math.floor((best[0] + best[1]) / 2);
+    // find the action at w
+    let seg = null;
+    const gj = repR(lvl, [...pre, [w, false], [1, false, null, true]]);
+    const ij = landR(gj, x0, x1, fm, opts.need);
+    if (ij > 0) seg = [[w, false], [1, false, null, true], [ij, false]];
+    for (let h = 4; h <= 120 && !seg; h += 4) {
+      const g = repR(lvl, [...pre, [w, false], [h, true]]);
+      if (g.player.dead || g.deaths) continue;
+      const i = landR(g, x0, x1, fm, opts.need);
+      if (i > 0) seg = [[w, false], [h, true], [i, false]];
+    }
+    pre = [...pre, ...seg];
+    report.push({ step: [x0, x1], window: best[1] - best[0] + 1, ranges });
+  }
+  const g = repR(lvl, [...pre, [400, false]]);
+  return { ok: g.completed, report, final: st(g) };
+}
+export { LEVELS }; // for in-memory layout experiments

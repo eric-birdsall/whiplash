@@ -35,6 +35,21 @@ where the next grapple will go and rings the target when it's locked, so the gam
 Level rule: anything you need to grab must sit up-and-ahead of where you'll be, near that 45° line.
 Keys can also be placed in a swing's path and collected by touch.
 
+**No softlocks (Runner):** standing pinned against anything you can't get past (a wall, a stuck crate,
+a locked door, a closed gate) for 0.45 s is a fail, with the same quick checkpoint respawn as a pit.
+Hanging on the rope or pulling something pauses that clock but doesn't reset it.
+
+**Aim-assist priority:** within the ±14° cone, rings, keys, levers and crates win over plain wood.
+
+**Runner level rules (checked by tools):**
+- Every obstacle has its grab point near the 45° line from a comfortable approach (hanging wood beams
+  are fine). Rings sit high enough to fire at while still running.
+- Every step needs a timing window of at least ~15 frames (0.25 s). Current minimum: 19.
+- Keys you need mid-crossing sit at the bottom of a ring's swing, so you collect them by touch.
+- Dev tools (in the dev server's console): `(await import('/tools/routes.js')).windowsAll()` prints the
+  window per step for each level's reference route; `(await import('/tools/sim.js')).auditR(level)`
+  plays sloppy random runs and reports death hotspots, softlocks and completions.
+
 **Ceiling-only grapple (Runner):** wood only catches the hook on its *underside*: you grapple ceilings,
 not ledge tops or walls (those clank off like metal). Rings work from any angle; keys, crates and levers
 still get pulled. Runner levels therefore need wood ceilings (or rings) wherever a climb is higher than a jump.

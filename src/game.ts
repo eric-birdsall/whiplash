@@ -71,6 +71,10 @@ export class Game implements Grid {
   /** Runner mode: wood only catches the hook on its underside (a ceiling), not ledge tops or walls. */
   ceilingOnly = false;
   hookRange = C.HOOK_RANGE;
+  /** Runner mode: being pinned against a wall (or a stuck crate / locked door / closed gate) is a fail. */
+  wallKills = false;
+  private blockedX = false;
+  private pinned = 0;
   private jumpBuffer = 0;
   private coyote = 0;
   crates: Crate[];
@@ -168,6 +172,7 @@ export class Game implements Grid {
     p.grounded = false;
     this.hook = { kind: 'idle' };
     this.jumpBuffer = this.coyote = 0;
+    this.pinned = 0;
   }
 
   restart() {
@@ -176,9 +181,13 @@ export class Game implements Grid {
     this.placePlayer();
   }
 
-  private kill() {
+  /** Why the last death happened (for the dev audit). */
+  lastDeath: { reason: string; x: number; y: number } | null = null;
+
+  private kill(reason = 'hazard') {
     const p = this.player;
     if (p.dead) return;
+    this.lastDeath = { reason, x: p.x + p.w / 2, y: p.y + p.h };
     p.dead = true;
     p.deadTimer = C.RESPAWN_DELAY;
     this.deaths++;
@@ -238,12 +247,14 @@ export class Game implements Grid {
     if (hookPressed && this.hook.kind === 'idle' && this.cooldown <= 0) this.fire(aim);
     this.updateHook(dt, hookDown);
     this.tryJump(dt, jumpPressed);
+    this.blockedX = false;
     this.updatePlayer(dt, moveX);
     if (this.hook.kind === 'anchored') this.tryMantle();
     this.updateCrates(dt);
     this.updateDoors();
     this.updateTriggers(false);
     this.checkHazards();
+    this.checkPinned(dt);
     this.checkFlags();
   }
 
@@ -256,16 +267,19 @@ export class Game implements Grid {
     const c = this.center();
     const f = this.player.facing >= 0 ? 1 : -1;
     const stepA = (1.5 * Math.PI) / 180;
+    // Within the cone, objects (rings, keys, levers, crates) beat plain wood; ties go to the angle closest to 45°.
+    let best: { a: number; pri: number; off: number } | null = null;
     for (let k = 0; k * stepA <= C.AIM_ASSIST + 1e-6; k++) {
       for (const s of k === 0 ? [1] : [1, -1]) {
         const a = C.AUTO_AIM_ANGLE + s * k * stepA;
-        const dx = Math.cos(a) * f, dy = -Math.sin(a);
-        const hit = this.castHook(c.x, c.y, dx, dy, this.hookRange);
-        if (hit && hit.what !== 'metal') return { x: c.x + dx * 5, y: c.y + dy * 5, locked: true };
+        const hit = this.castHook(c.x, c.y, Math.cos(a) * f, -Math.sin(a), this.hookRange);
+        if (!hit || hit.what === 'metal') continue;
+        const pri = hit.what === 'wood' ? 1 : 2;
+        if (!best || pri > best.pri) best = { a, pri, off: k };
       }
     }
-    const a = C.AUTO_AIM_ANGLE;
-    return { x: c.x + Math.cos(a) * f * 5, y: c.y - Math.sin(a) * 5, locked: false };
+    const a = best ? best.a : C.AUTO_AIM_ANGLE;
+    return { x: c.x + Math.cos(a) * f * 5, y: c.y - Math.sin(a) * 5, locked: !!best };
   }
 
   private fire(aim: Vec) {
@@ -505,7 +519,7 @@ export class Game implements Grid {
           }
         }
       }
-      if (!stepped) p.vx = 0;
+      if (!stepped) { p.vx = 0; this.blockedX = true; }
     }
     if (pushing) p.vx = Math.max(-C.PUSH_SPEED, Math.min(C.PUSH_SPEED, p.vx));
     if (moveAxis(p, 'y', p.vy * dt, this, crates)) p.vy = 0;
@@ -640,15 +654,29 @@ export class Game implements Grid {
     if (!silent) this.sfx('gate');
   }
 
+  /** Runner: standing pinned against something you can't get past → quick fail and checkpoint respawn. */
+  private checkPinned(dt: number) {
+    const p = this.player;
+    if (!this.wallKills || p.dead) return;
+    const k = this.hook.kind;
+    if (this.blockedX && p.grounded) {
+      // Pulling a key/crate or hanging on the rope pauses the clock; it doesn't reset it.
+      if (k !== 'anchored' && k !== 'pulling') this.pinned += dt;
+    } else if (!this.blockedX) {
+      this.pinned = 0; // moving again (running, jumping or swinging)
+    }
+    if (this.pinned >= C.PIN_KILL) this.kill('pinned');
+  }
+
   private checkHazards() {
     const p = this.player;
-    if (p.y > this.h + 1) { this.kill(); return; }
+    if (p.y > this.h + 1) { this.kill('pit'); return; }
     const x0 = Math.floor(p.x), x1 = Math.floor(p.x + p.w);
     const y0 = Math.floor(p.y), y1 = Math.floor(p.y + p.h);
     for (let ty = y0; ty <= y1; ty++)
       for (let tx = x0; tx <= x1; tx++) {
         if (this.tileAt(tx, ty) !== Tile.Spikes) continue;
-        if (overlaps(p, { x: tx + 0.12, y: ty + 0.3, w: 0.76, h: 0.7 })) { this.kill(); return; }
+        if (overlaps(p, { x: tx + 0.12, y: ty + 0.3, w: 0.76, h: 0.7 })) { this.kill('spikes'); return; }
       }
   }
 
