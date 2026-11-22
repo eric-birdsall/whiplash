@@ -73,6 +73,7 @@ export class Audio {
       case 'death': this.noise(0.35, 0.4, 500, 0.7); this.tone('sawtooth', 300, 60, 0.35, 0.1); break;
       case 'checkpoint': [660, 990].forEach((f, i) => this.tone('triangle', f, f, 0.18, 0.12, i * 0.09)); break;
       case 'mantle': this.noise(0.08, 0.2, 900, 1.5); this.tone('triangle', 300, 500, 0.08, 0.07); break;
+      case 'jump': this.noise(0.06, 0.18, 1400, 1.2); this.tone('triangle', 260, 520, 0.09, 0.07); break;
       case 'win': [523, 659, 784, 1047].forEach((f, i) => this.tone('triangle', f, f, 0.25, 0.13, i * 0.1)); break;
     }
   }

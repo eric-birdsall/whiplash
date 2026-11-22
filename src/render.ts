@@ -83,7 +83,10 @@ export class Renderer {
     };
   }
 
-  draw(g: Game, opts: { aim: Vec | null; touch: boolean; buttons: TouchButton[]; held: Set<number> }) {
+  draw(g: Game, opts: {
+    aim: Vec | null; touch: boolean; buttons: TouchButton[]; held: Set<number>;
+    runner: boolean; zones: { jump: boolean; hook: boolean };
+  }) {
     const { ctx, canvas } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#05070c';
@@ -115,7 +118,35 @@ export class Renderer {
     ctx.restore();
 
     this.drawHud(g);
-    if (opts.touch) this.drawButtons(opts.buttons, opts.held);
+    if (opts.touch && opts.runner) this.drawZones(opts.zones);
+    else if (opts.touch) this.drawButtons(opts.buttons, opts.held);
+  }
+
+  /** Runner mode on touch: label the two halves of the screen. */
+  private drawZones(zones: { jump: boolean; hook: boolean }) {
+    const { ctx, canvas } = this;
+    const s = this.dpr;
+    const w = canvas.width, h = canvas.height;
+    const fs = Math.max(12, Math.min(18, h / s * 0.035)) * s;
+    // Faint divider along the bottom of the center line
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 2 * s;
+    ctx.setLineDash([6 * s, 8 * s]);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, h * 0.62);
+    ctx.lineTo(w / 2, h - 12 * s);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = `700 ${fs}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    const label = (text: string, x: number, align: CanvasTextAlign, on: boolean) => {
+      ctx.textAlign = align;
+      ctx.fillStyle = on ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.3)';
+      ctx.fillText(text, x, h - fs * 1.1);
+    };
+    label('▲ JUMP', fs * 1.2, 'left', zones.jump);
+    label('HOOK ◆', w - fs * 1.2, 'right', zones.hook);
+    ctx.textAlign = 'left';
   }
 
   private drawBackground(vw: number, vh: number) {

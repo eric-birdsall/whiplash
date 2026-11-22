@@ -104,3 +104,5 @@ button:disabled { opacity: 0.35; cursor: default; }
 
 body.touch .desktop-only { display: none; }
 body:not(.touch) .touch-only { display: none; }
+body.runner .classic-only { display: none; }
+body:not(.runner) .runner-only { display: none; }

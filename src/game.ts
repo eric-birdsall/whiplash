@@ -51,7 +51,7 @@ export interface Particle {
 }
 
 export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'pull' | 'key' | 'door' | 'lever' | 'plate'
-  | 'gate' | 'death' | 'checkpoint' | 'mantle' | 'win';
+  | 'gate' | 'death' | 'checkpoint' | 'mantle' | 'win' | 'jump';
 
 interface Snapshot {
   crates: { x: number; y: number }[];
@@ -67,6 +67,8 @@ export class Game implements Grid {
   player: Player;
   hook: Hook = { kind: 'idle' };
   cooldown = 0;
+  private jumpBuffer = 0;
+  private coyote = 0;
   crates: Crate[];
   keys: KeyObj[];
   levers: Lever[];
@@ -160,6 +162,7 @@ export class Game implements Grid {
     p.dead = false;
     p.grounded = false;
     this.hook = { kind: 'idle' };
+    this.jumpBuffer = this.coyote = 0;
   }
 
   restart() {
@@ -210,7 +213,7 @@ export class Game implements Grid {
   // ---------- Update ----------
 
   /** Advance one fixed step. aim is in world coordinates. */
-  update(dt: number, moveX: number, hookDown: boolean, hookPressed: boolean, aim: Vec) {
+  update(dt: number, moveX: number, hookDown: boolean, hookPressed: boolean, aim: Vec, jumpPressed = false) {
     this.updateParticles(dt);
     for (const k of this.keys) k.bob += dt;
     if (this.completed) return;
@@ -229,6 +232,7 @@ export class Game implements Grid {
     this.cooldown = Math.max(0, this.cooldown - dt);
     if (hookPressed && this.hook.kind === 'idle' && this.cooldown <= 0) this.fire(aim);
     this.updateHook(dt, hookDown);
+    this.tryJump(dt, jumpPressed);
     this.updatePlayer(dt, moveX);
     if (this.hook.kind === 'anchored') this.tryMantle();
     this.updateCrates(dt);
@@ -317,14 +321,7 @@ export class Game implements Grid {
           const d = Math.hypot(dx, dy);
           const s = Math.min(d, C.PULL_SPEED * 1.3 * dt);
           k.x += (dx / d) * s; k.y += (dy / d) * s;
-          if (d < 0.6) {
-            k.collected = true;
-            this.player.keys++;
-            this.burst(k.x, k.y, 14, '#ffd23f', 5, 4);
-            this.sfx('key');
-            this.hook = { kind: 'idle' };
-            this.cooldown = C.HOOK_COOLDOWN;
-          }
+          if (d < 0.6) this.collectKey(k);
         } else {
           const cr = tg.crate;
           const dx = c.x - (cr.x + cr.w / 2);
@@ -389,6 +386,19 @@ export class Game implements Grid {
     return best as Hit | null;
   }
 
+  /** Runner-mode jump, with coyote time and an input buffer so taps feel fair. */
+  private tryJump(dt: number, pressed: boolean) {
+    const p = this.player;
+    this.jumpBuffer = pressed ? C.JUMP_BUFFER : Math.max(0, this.jumpBuffer - dt);
+    this.coyote = p.grounded ? C.COYOTE : Math.max(0, this.coyote - dt);
+    if (this.jumpBuffer <= 0 || this.coyote <= 0) return;
+    p.vy = -C.JUMP_VEL;
+    p.grounded = false;
+    this.jumpBuffer = this.coyote = 0;
+    this.burst(p.x + p.w / 2, p.y + p.h, 6, '#c9b48a', 3);
+    this.sfx('jump');
+  }
+
   private updatePlayer(dt: number, moveX: number) {
     const p = this.player;
     const h = this.hook;
@@ -419,7 +429,7 @@ export class Game implements Grid {
       }
     }
 
-    p.vy = Math.min(C.MAX_FALL, p.vy + C.GRAVITY * dt);
+    p.vy = Math.min(C.MAX_FALL, p.vy + (anchored ? C.SWING_GRAVITY : C.GRAVITY) * dt);
 
     // Rope: one-sided distance constraint, solved on velocity.
     if (h.kind === 'anchored') {
@@ -542,8 +552,26 @@ export class Game implements Grid {
     }
   }
 
+  private collectKey(k: { x: number; y: number; collected: boolean }) {
+    k.collected = true;
+    this.player.keys++;
+    this.burst(k.x, k.y, 14, '#ffd23f', 5, 4);
+    this.sfx('key');
+    const h = this.hook;
+    if (h.kind === 'pulling' && h.target.kind === 'key' && h.target.key === k) {
+      this.hook = { kind: 'idle' };
+      this.cooldown = C.HOOK_COOLDOWN;
+    }
+  }
+
   private updateDoors() {
     const p = this.player;
+    // Running (or jumping) into a key grabs it too.
+    for (const k of this.keys) {
+      if (k.collected) continue;
+      const s = C.KEY_SIZE;
+      if (overlaps(p, { x: k.x - s / 2, y: k.y - s / 2, w: s, h: s })) this.collectKey(k);
+    }
     if (p.keys <= 0) return;
     const reach = { x: p.x - 0.15, y: p.y - 0.15, w: p.w + 0.3, h: p.h + 0.3 };
     for (const d of this.doors) {

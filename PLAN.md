@@ -1,7 +1,7 @@
 # Whiplash — MVP Plan
 
-A 2D, no-jump puzzle platformer. Your grappling hook is your only way up:
-swing from it, reel yourself in, and yank things to you.
+A 2D grappling-hook platformer. Swing from the hook, reel yourself in, and yank things to you.
+Two modes: **Runner** (always running, tap to jump, time your grapples) and **Classic** (free movement, no jump).
 
 **Audience:** teens and adults. A skill game — you can fall and die, retry instantly.
 
@@ -17,18 +17,36 @@ swing from it, reel yourself in, and yank things to you.
 | Save | `localStorage` (unlocked levels, best deaths/time) |
 | Hosting | GitHub Pages via Actions workflow; Vite `base: './'` so it works under any subpath |
 
+## Modes
+
+Toggle on the title and pause screens (saved in `localStorage` as `whiplash.mode`). Both modes share levels and saves.
+
+- **Runner (default):** the hero always runs right. You time jumps and grapples. Hanging on the rope
+  still pumps the swing forward. Jump ≈ 1.5 tiles high and ≈ 4.4 tiles long, with coyote time (0.1 s)
+  and an input buffer (0.12 s).
+- **Classic:** move freely, no jump. The original puzzle-platformer design.
+
+Keys are collected by hooking them *or* by touching them (e.g. jumping through a floating key).
+
 ## Controls
 
-**Desktop:** A/D or ←/→ move · mouse click aims & fires the hook toward the cursor, hold to stay
-attached · R restart from checkpoint · Esc pause.
+**Runner, desktop:** Space / W / ↑ jump · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
 
-**Mobile (landscape only):** big ◀ ▶ buttons bottom-left · tap anywhere else fires the hook toward that
-point, hold to stay attached · multitouch so you can hold ▶ while hooking. Portrait shows a
-"rotate your device" notice. Touch buttons appear only on touch devices.
+**Runner, mobile:** tap the **left half** of the screen to jump · tap the **right half** to fire the hook
+toward that point, hold to stay attached. Faint JUMP / HOOK labels sit at the bottom corners.
+Because grapple taps must be in the right half, hook targets in runner levels should sit ahead of the
+camera center (≈ 1.5 tiles ahead of the hero).
 
-Input is a thin layer producing `{ moveX, hookDown, hookPressed, aimScreen }`, so gamepad can be added later.
+**Classic, desktop:** A/D or ←/→ move · click aims & fires the hook, hold to stay attached · R restart · Esc pause.
 
-**No jump.** Ever.
+**Classic, mobile (landscape only):** big ◀ ▶ buttons bottom-left · tap anywhere else fires the hook toward that
+point, hold to stay attached · multitouch so you can hold ▶ while hooking.
+
+Portrait shows a "rotate your device" notice. Touch controls appear only on touch devices.
+
+Input is a thin layer producing `{ moveX, hookDown, hookPressed, jumpPressed, aimScreen }`, so gamepad can be added later.
+
+In Classic: **no jump.** Ever.
 
 ## The hook
 

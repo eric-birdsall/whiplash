@@ -20,6 +20,16 @@ let levelIndex = 0;
 let game = makeGame(0);
 let mouseSeen = false;
 
+// Runner mode (default): always run right, tap to jump. Classic: move freely, no jump.
+const MODE_KEY = 'whiplash.mode';
+let runner = localStorage.getItem(MODE_KEY) !== 'classic';
+function applyMode() {
+  input.runner = runner;
+  document.body.classList.toggle('runner', runner);
+  $('tagline').textContent = runner ? 'Never stop running.' : 'No jump. Just the hook.';
+  document.querySelectorAll('.mode-btn').forEach((b) => { b.textContent = `Mode: ${runner ? 'Runner' : 'Classic'}`; });
+}
+
 input.onFirstGesture = () => audio.unlock();
 canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') mouseSeen = true; });
 
@@ -77,6 +87,7 @@ document.addEventListener('click', (e) => {
     case 'title': show('title'); break;
     case 'resume': show('play'); break;
     case 'restart-level': startLevel(levelIndex); break;
+    case 'mode': runner = !runner; localStorage.setItem(MODE_KEY, runner ? 'runner' : 'classic'); applyMode(); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
     case 'next': startLevel(Math.min(levelIndex + 1, LEVELS.length - 1)); break;
     case 'replay': startLevel(levelIndex); break;
@@ -125,12 +136,14 @@ function frame(now: number) {
       if (st.restart) { game.restart(); renderer.snapCamera(game); }
       acc += dt;
       let pressed = st.hookPressed;
+      let jump = st.jumpPressed;
       while (acc >= C.STEP) {
         const aim = renderer.screenToWorld(st.aimX, st.aimY);
         const wasDead = game.player.dead;
-        game.update(C.STEP, st.moveX, st.hookDown, pressed, aim);
+        game.update(C.STEP, runner ? 1 : st.moveX, st.hookDown, pressed, aim, runner && jump);
         if (wasDead && !game.player.dead) renderer.snapCamera(game);
         pressed = false;
+        jump = false;
         acc -= C.STEP;
       }
       if (game.completed && screen === 'play') {
@@ -153,11 +166,14 @@ function frame(now: number) {
     touch: input.touchMode && (screen === 'play' || screen === 'won'),
     buttons: input.buttons(),
     held: input.heldDirs(),
+    runner,
+    zones: input.heldZones(),
   });
   input.clearEdges();
   requestAnimationFrame(frame);
 }
 
+applyMode();
 renderer.resize();
 checkOrientation();
 show('title');
