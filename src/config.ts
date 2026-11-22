@@ -23,11 +23,11 @@ export const DOUBLE_JUMP_VEL = 12; // one extra jump in the air, refreshed on la
 export const COYOTE = 0.1; // can still jump this long after leaving a ledge
 export const JUMP_BUFFER = 0.12; // a tap this early before landing still jumps
 
-// Grapple: fires at a fixed 45° up-forward, bending toward a ring or wood underside within the assist cone.
+// Grapple: fires at a fixed 60° up-forward, bending toward a ring or wood underside within the assist cone.
 export const HOOK_SPEED = 48;
-export const HOOK_RANGE = 11;
-export const AUTO_AIM_ANGLE = Math.PI / 4;
-export const AIM_ASSIST = (14 * Math.PI) / 180; // max bend either side of 45°
+export const HOOK_RANGE = 16.5;
+export const AUTO_AIM_ANGLE = Math.PI / 3;
+export const AIM_ASSIST = (14 * Math.PI) / 180; // max bend either side of 60°
 export const HOOK_RETURN_SPEED = 160; // a missed shot snaps back fast
 export const HOOK_COOLDOWN = 0.06;
 // A tap is remembered this long (while still held) and fires as soon as the hook is ready.
@@ -60,3 +60,6 @@ export const PERFECT_FLING_Y = 4.5;
 export const CHAIN_BOOST_PER_LINK = 0.3; // landing burst × (1 + this × (links − 1)), capped below
 export const CHAIN_BOOST_MAX = 2;
 export const CHAIN_BONUS_PER_LINK = 5; // bonus metres per link beyond the first
+
+// Double jump flourish: a forward tuck (one full spin) over this long. Cosmetic only.
+export const FLIP_TIME = 0.5;

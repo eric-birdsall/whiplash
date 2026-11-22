@@ -7,14 +7,14 @@ import * as C from '/src/config.ts';
 const DT = 1 / 60;
 
 /** A test strip: runway, one forced obstacle, landing runway. Returns { game, gapStart, gapEnd }. */
-export function strip(kind, { gap, rise, speed = C.RUN_SPEED, seed = 1 } = {}) {
+export function strip(kind, { gap, rise, beamLen, speed = C.RUN_SPEED, seed = 1 } = {}) {
   const gen = new EndlessGen(seed);
   gen.gy = 14;
   const cols = [];
   const rings = [];
   for (let i = 0; i < 14; i++) cols.push(gen.slab(gen.gy));
   const x0 = cols.length;
-  const ch = gen.next(speed, 0, kind, { gap, rise, plat: 6 });
+  const ch = gen.next(speed, 0, kind, { gap, rise, beamLen, plat: 6 });
   cols.push(...ch.cols);
   ch.rings.forEach((r) => rings.push({ x: r.x + x0, y: r.y }));
   for (let i = 0; i < 24; i++) cols.push(gen.slab(gen.gy));
@@ -97,14 +97,17 @@ export function window(kind, opts) {
 }
 
 /** Every obstacle at the ends of its ranges, at base and top speed. */
-export function checkAll({ speeds = [C.RUN_SPEED, C.RUN_SPEED + 3.5] } = {}) {
+export function checkAll({ speeds = [C.RUN_SPEED, C.RUN_SPEED + 3.5], kinds = Object.keys(OBSTACLES) } = {}) {
   const out = [];
   for (const [kind, o] of Object.entries(OBSTACLES)) {
+    if (!kinds.includes(kind)) continue;
     const gaps = o.gap ? [o.gap[0], o.gap[1]] : [0];
     const rises = [o.rise[0], o.rise[1]];
-    for (const speed of speeds) for (const gap of gaps) for (const rise of rises) {
-      const r = window(kind, { gap, rise, speed });
-      out.push(`${kind} gap${gap}→${r.gap} rise${rise} v${speed}: ${r.window}f ${JSON.stringify(r.how)}`);
+    const lens = o.beamLen ? [o.beamLen[0], o.beamLen[1]] : [undefined];
+    for (const speed of speeds) for (const gap of gaps) for (const rise of rises) for (const beamLen of lens) {
+      const r = window(kind, { gap, rise, speed, beamLen });
+      const w = beamLen ? ` w${beamLen}` : '';
+      out.push(`${kind} gap${gap}→${r.gap} rise${rise}${w} v${speed}: ${r.window}f ${JSON.stringify(r.how)}`);
     }
   }
   return out;

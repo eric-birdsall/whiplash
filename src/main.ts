@@ -13,13 +13,30 @@ const input = new Input(canvas);
 const audio = new Audio();
 
 let screen: Screen = 'title';
+
+// Grapple angle (degrees): a playtest option on the title and pause screens, saved between visits.
+const ANGLE_KEY = 'whiplash.aimAngle';
+const ANGLE_DEFAULT = (C.AUTO_AIM_ANGLE * 180) / Math.PI;
+const ANGLE_MIN = 20, ANGLE_MAX = 75, ANGLE_STEP = 2.5;
+let aimDeg = Number(localStorage.getItem(ANGLE_KEY)) || ANGLE_DEFAULT;
 /** The current run. A fresh one sits behind the title screen as a backdrop. */
 let run = newRun();
 
 input.onFirstGesture = () => audio.unlock();
 
+/** Set the grapple angle (snapped to the step, clamped) and refresh every − value + control. */
+function setAimDeg(d: number) {
+  aimDeg = Math.min(ANGLE_MAX, Math.max(ANGLE_MIN, Math.round(d / ANGLE_STEP) * ANGLE_STEP));
+  localStorage.setItem(ANGLE_KEY, String(aimDeg));
+  run.game.aimAngle = (aimDeg * Math.PI) / 180; // applies to the current run too (e.g. from Pause)
+  for (const el of document.querySelectorAll('.angle-val')) el.textContent = `${aimDeg}°`;
+  for (const el of document.querySelectorAll<HTMLButtonElement>('[data-action=angle-down]')) el.disabled = aimDeg <= ANGLE_MIN;
+  for (const el of document.querySelectorAll<HTMLButtonElement>('[data-action=angle-up]')) el.disabled = aimDeg >= ANGLE_MAX;
+}
+
 function newRun(): EndlessRun {
   const r = new EndlessRun((s) => audio.play(s));
+  r.game.aimAngle = (aimDeg * Math.PI) / 180;
   renderer.resize();
   renderer.snapCamera(r.game);
   return r;
@@ -62,6 +79,8 @@ document.addEventListener('click', (e) => {
     case 'resume': show('play'); break;
     case 'restart': startRun(); break;
     case 'hard-reload': hardReload(); break;
+    case 'angle-down': setAimDeg(aimDeg - ANGLE_STEP); break;
+    case 'angle-up': setAimDeg(aimDeg + ANGLE_STEP); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
   }
 });
@@ -190,6 +209,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 }
 
 showBuildInfo();
+setAimDeg(aimDeg);
 renderer.resize();
 checkOrientation();
 show('title');

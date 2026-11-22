@@ -1,5 +1,6 @@
 // The hero: a musclebound commando drawn from simple shapes.
 // Drawn around the player's hitbox (0.75 x 1.25 tiles); shoulders deliberately spill past it.
+import * as C from './config';
 import type { Game } from './game';
 import type { Vec } from './level';
 
@@ -32,6 +33,8 @@ export interface Pose {
   running: boolean;
   air: boolean;
   hanging: boolean;
+  spin: number; // double-jump front tuck rotation (radians, forward +)
+  tuck: number; // 0 = open, 1 = knees to chest
 }
 
 export function computePose(g: Game, aimWorld: Vec | null): Pose {
@@ -60,13 +63,26 @@ export function computePose(g: Game, aimWorld: Vec | null): Pose {
     tilt = Math.max(-0.25, Math.min(0.25, p.vx * 0.02));
   }
 
+  // Double-jump front tuck: one forward spin, fastest in the middle; tuck in fast, open up at the end.
+  let spin = 0, tuck = 0;
+  if (g.flipT >= 0) {
+    const t = Math.min(1, g.flipT / C.FLIP_TIME);
+    spin = facing * Math.PI * 2 * t * t * (3 - 2 * t);
+    tuck = Math.min(1, Math.sin(Math.PI * t) * 1.8);
+    // The front arm reaches down to the shins (local angle 1.4, nearly straight down), then swings back out to aim.
+    const rot = tilt + spin;
+    const local = Math.atan2(Math.sin(aim), Math.cos(aim) * facing) - rot * facing;
+    const l = local + (1.4 - local) * tuck;
+    aim = Math.atan2(Math.sin(l), Math.cos(l) * facing) + rot;
+  }
+
   const hip = { x: feet.x, y: feet.y - 0.5 };
   // Front shoulder, matching drawHero's local (0.22, SHOULDER_Y + 0.05); rope leaves the gauntlet tip.
-  const sh = rotate({ x: feet.x + facing * 0.22, y: feet.y + SHOULDER_Y + 0.05 }, hip, tilt);
+  const sh = rotate({ x: feet.x + facing * 0.22, y: feet.y + SHOULDER_Y + 0.05 }, hip, tilt + spin);
   const hand = { x: sh.x + Math.cos(aim) * GAUNTLET_TIP, y: sh.y + Math.sin(aim) * GAUNTLET_TIP };
 
   const running = p.grounded && Math.abs(p.vx) > 0.4;
-  return { feet, facing, tilt, aim, hand, phase: p.x * 4.2, running, air: !p.grounded, hanging };
+  return { feet, facing, tilt, aim, hand, phase: p.x * 4.2, running, air: !p.grounded, hanging, spin, tuck };
 }
 
 function rotate(pt: Vec, about: Vec, a: number): Vec {
@@ -104,7 +120,15 @@ function leg(ctx: CanvasRenderingContext2D, hx: number, hy: number, a: number, k
   ctx.fill();
 }
 
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+
 function legAngles(pose: Pose, front: boolean): [number, number] {
+  if (pose.tuck > 0) {
+    // Knees to chest: thighs forward and up, shins folded back.
+    const [a, k] = front ? [0.55, 0.9] : [-0.25, 0.35];
+    const [ta, tk] = front ? [2.0, 2.6] : [1.8, 2.5];
+    return [mix(a, ta, pose.tuck), mix(k, tk, pose.tuck)];
+  }
   if (pose.hanging) return front ? [0.35, 0.5] : [-0.1, 0.25];
   if (pose.air) return front ? [0.55, 0.9] : [-0.25, 0.35];
   if (pose.running) {
@@ -117,9 +141,9 @@ function legAngles(pose: Pose, front: boolean): [number, number] {
 export function drawHero(ctx: CanvasRenderingContext2D, g: Game, pose: Pose, time: number) {
   const f = pose.facing;
   ctx.save();
-  // Local space: origin at feet, +x = forward, y down. Rotate about hip for tilt.
+  // Local space: origin at feet, +x = forward, y down. Rotate about hip for tilt (and the flip's spin).
   ctx.translate(pose.feet.x, pose.feet.y - 0.5);
-  ctx.rotate(pose.tilt);
+  ctx.rotate(pose.tilt + pose.spin);
   ctx.translate(0, 0.5);
   ctx.scale(f, 1);
   ctx.lineCap = 'round';
@@ -131,7 +155,8 @@ export function drawHero(ctx: CanvasRenderingContext2D, g: Game, pose: Pose, tim
   const shX = 0.08;
 
   // Back arm: swings opposite the front leg when running, braces when hanging.
-  const backSwing = pose.running ? Math.sin(pose.phase) * 0.7 : pose.air ? -0.6 : 0.15;
+  let backSwing = pose.running ? Math.sin(pose.phase) * 0.7 : pose.air ? -0.6 : 0.15;
+  backSwing = mix(backSwing, 1.5, pose.tuck); // tucking: reach forward to hug the shins
   const bx = -0.2, by = shY + 0.04;
   const be = { x: bx + Math.sin(backSwing) * 0.22, y: by + Math.cos(backSwing) * 0.22 };
   const bh = { x: be.x + Math.sin(backSwing + 0.5) * 0.2, y: be.y + Math.cos(backSwing + 0.5) * 0.2 };
@@ -213,7 +238,7 @@ export function drawHero(ctx: CanvasRenderingContext2D, g: Game, pose: Pose, tim
   drawHead(ctx, shX - 0.02, shY - 0.27, pose, time);
 
   // Front arm: aims at the hook (local angle mirrors with facing).
-  const aimLocal = Math.atan2(Math.sin(pose.aim), Math.cos(pose.aim) * f) - pose.tilt * f;
+  const aimLocal = Math.atan2(Math.sin(pose.aim), Math.cos(pose.aim) * f) - (pose.tilt + pose.spin) * f;
   const ux = Math.cos(aimLocal), uy = Math.sin(aimLocal);
   const sx = shX + 0.14, sy = shY + 0.05;
   const ex = sx + ux * 0.21, ey = sy + uy * 0.21;

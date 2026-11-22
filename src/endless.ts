@@ -1,5 +1,5 @@
 // Endless run: one procedurally generated level that keeps growing ahead of the runner.
-// Platforms with gaps; each gap is beaten with a jump, a double jump, or a 45° grapple
+// Platforms with gaps; each gap is beaten with a jump, a double jump, or a 60° grapple
 // (a hanging wood beam or a ring). Speed and difficulty ramp with distance.
 
 import * as C from './config';
@@ -33,7 +33,9 @@ export const OBSTACLES = {
   double: { gap: [6, 8], rise: [-3, 1] },
   step: { rise: [1, 3] }, // no gap: a ledge to hop up (3 needs the double jump)
   // Beam and ring gaps are wider than a double jump reaches, so they need the grapple.
-  beam: { gap: [11, 13], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
+  // Beams hang near the top of the screen (beamAbove tiles over the takeoff surface). Widths vary; narrow
+  // ones get more common with difficulty. beamAt = where the beam starts, as a fraction of the gap.
+  beam: { gap: [11, 13], rise: [-2, 1], beamAbove: 8, beamLen: [2, 6], beamAt: 0.15 },
   ring: { gap: [11, 12], rise: [-2, 0], ringAbove: 5 },
   // Two rings over one long gap: swing rope to rope (a built-in swing chain).
   chain: { gap: [19, 21], rise: [-2, 0], ringAbove: 5, ring2At: 0.68 },
@@ -83,7 +85,7 @@ export class EndlessGen {
    * One platform followed by one obstacle. speed scales gap widths; d (0..1) shortens platforms.
    * `force` picks the obstacle (used by the checker).
    */
-  next(speed: number, d: number, force?: ObstacleKind, params?: { gap?: number; rise?: number; plat?: number }) {
+  next(speed: number, d: number, force?: ObstacleKind, params?: { gap?: number; rise?: number; plat?: number; beamLen?: number }) {
     const cols: Uint8Array[] = [];
     const rings: Vec[] = [];
     const k = speed / C.RUN_SPEED;
@@ -95,7 +97,9 @@ export class EndlessGen {
       const ng = Math.min(this.maxGy, Math.max(this.minGy, this.gy - rise));
       return this.gy - ng;
     };
-    const o = OBSTACLES[kind] as { gap?: number[]; rise: number[]; beamAbove?: number; beamLen?: number; ringAbove?: number; ring2At?: number };
+    const o = OBSTACLES[kind] as {
+      gap?: number[]; rise: number[]; beamAbove?: number; beamLen?: number[]; beamAt?: number; ringAbove?: number; ring2At?: number;
+    };
     const rise = clampRise(params?.rise ?? this.ri(o.rise[0], o.rise[1]));
     const gapBase = params?.gap ?? (o.gap ? o.gap[0] + this.rand() * (o.gap[1] - o.gap[0]) : 0);
     // Going up shortens what you can clear; going down lengthens it a little.
@@ -107,8 +111,11 @@ export class EndlessGen {
 
     if (kind === 'beam') {
       const row = Math.max(1, takeoffGy - (o.beamAbove ?? 6) - 1); // tile row; underside is row + 1
-      const from = startX + Math.max(0, Math.round(gap * 0.15));
-      for (let i = 0; i < (o.beamLen ?? 6); i++) {
+      const from = startX + Math.max(0, Math.round(gap * (o.beamAt ?? 0.15)));
+      const [lo, hi] = o.beamLen ?? [6, 6];
+      // Skewed toward narrow as difficulty rises.
+      const len = params?.beamLen ?? lo + Math.floor(Math.pow(this.rand(), 1 + 2 * d) * (hi - lo + 1));
+      for (let i = 0; i < len; i++) {
         const ci = from + i;
         while (cols.length <= ci) cols.push(this.slab(takeoffGy - rise));
         cols[ci][row] = Tile.Wood;

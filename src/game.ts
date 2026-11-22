@@ -32,7 +32,7 @@ export interface Popup { text: string; x: number; y: number; life: number; max: 
 export type HookHit = { t: number; what: 'wood' | 'ring' | 'solid'; rx?: number; ry?: number };
 
 /**
- * The Endless runner: always running right, jump + double jump, and a fixed 45° grapple with aim
+ * The Endless runner: always running right, jump + double jump, and a fixed 60° grapple with aim
  * assist that catches only wood undersides and rings. One life; the world grows via appendColumns.
  */
 export class Game implements Grid {
@@ -42,6 +42,8 @@ export class Game implements Grid {
   hook: Hook = { kind: 'idle' };
   cooldown = 0;
   hookRange = C.HOOK_RANGE;
+  /** Grapple angle above horizontal (radians). Set from the menu's playtest option. */
+  aimAngle = C.AUTO_AIM_ANGLE;
   /** Horizontal run speed (ramps up with distance). */
   runSpeed: number = C.RUN_SPEED;
   /** How far ahead (tiles) the camera looks. */
@@ -70,6 +72,8 @@ export class Game implements Grid {
   bonus = 0;
   /** Perfect releases this run (for tools and stats). */
   perfects = 0;
+  /** Seconds into the double-jump front tuck, or -1 when not flipping (cosmetic). */
+  flipT = -1;
 
   constructor(public level: Level, private sfx: (s: Sfx) => void = () => {}) {
     this.w = level.w;
@@ -165,12 +169,17 @@ export class Game implements Grid {
     this.tryJump(dt, jumpPressed);
     this.blockedX = false;
     this.updatePlayer(dt);
+    // The tuck ends on its own, on landing, or when the grapple fires (the arm is needed).
+    if (this.flipT >= 0) {
+      this.flipT += dt;
+      if (this.flipT >= C.FLIP_TIME || p.grounded || this.hook.kind !== 'idle') this.flipT = -1;
+    }
     if (p.y > this.h + 1) this.kill('fell');
     this.checkPinned(dt);
   }
 
   /**
-   * The aim: a fixed 45° shot up and forward. If it would miss, bend up to AIM_ASSIST toward the
+   * The aim: a fixed 60° shot up and forward. If it would miss, bend up to AIM_ASSIST toward the
    * closest angle that hits something to hang from; rings beat wood. Returns a world point along the
    * chosen direction, plus whether it locks onto something.
    */
@@ -180,14 +189,14 @@ export class Game implements Grid {
     let best: { a: number; pri: number } | null = null;
     for (let k = 0; k * stepA <= C.AIM_ASSIST + 1e-6; k++) {
       for (const s of k === 0 ? [1] : [1, -1]) {
-        const a = C.AUTO_AIM_ANGLE + s * k * stepA;
+        const a = this.aimAngle + s * k * stepA;
         const hit = this.castHook(c.x, c.y, Math.cos(a), -Math.sin(a), this.hookRange);
         if (!hit || hit.what === 'solid') continue;
         const pri = hit.what === 'ring' ? 2 : 1;
         if (!best || pri > best.pri) best = { a, pri };
       }
     }
-    const a = best ? best.a : C.AUTO_AIM_ANGLE;
+    const a = best ? best.a : this.aimAngle;
     return { x: c.x + Math.cos(a) * 5, y: c.y - Math.sin(a) * 5, locked: !!best };
   }
 
@@ -311,6 +320,7 @@ export class Game implements Grid {
     if (pressed && !p.grounded && this.coyote <= 0 && this.airJumpsLeft > 0 && this.hook.kind !== 'anchored') {
       this.airJumpsLeft--;
       p.vy = -C.DOUBLE_JUMP_VEL;
+      this.flipT = 0;
       this.jumpBuffer = 0;
       this.burst(p.x + p.w / 2, p.y + p.h, 10, '#7df0ff', 4);
       this.sfx('jump');
