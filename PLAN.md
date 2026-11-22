@@ -138,6 +138,18 @@ src/
   save.ts        localStorage
 ```
 
+## Install & offline (PWA)
+
+- `public/manifest.webmanifest`: name, fullscreen, landscape, icons (192, 512, maskable 512).
+- iOS: `apple-touch-icon` (180), `apple-mobile-web-app-capable`, `black-translucent` status bar, title.
+- Service worker: `vite.config.ts` writes `dist/sw.js` after each build, precaching every output file.
+  The cache name is a hash of all files, so each deploy replaces the old cache. Pages load
+  network-first (3 s timeout) so new deploys show up; hashed assets load cache-first.
+  It's registered only in production builds (`npm run dev` has no service worker).
+- Icons are drawn by `tools/make_icons.py` (Pillow): `python3 -m venv .venv && .venv/bin/pip install pillow && .venv/bin/python tools/make_icons.py`.
+- On iPhone: open the site in Safari → Share → Add to Home Screen. Saves made in the home-screen app
+  are separate from Safari's.
+
 ## Running
 
 ```bash
