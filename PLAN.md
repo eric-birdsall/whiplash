@@ -67,10 +67,13 @@ Runner rules, plus a **double jump** (one extra jump in the air, refreshed on la
 One life: falling or getting pinned ends the run. Score is distance in meters; best is saved in
 `localStorage` (`whiplash.endless.best`).
 
-- Each chunk is a stone platform then one obstacle: **jump** (gap 2–3), **double** (gap 4–6),
-  **step** (a 1–2 tile wall), **beam** (gap 7–11 under a hanging wood beam ~6 above the takeoff),
-  **ring** (gap 6–9 with a ring ~5 above). Gaps scale with speed; ledges move up/down a little.
-- Speed ramps 7 → 10.5 over 1,600 m; platforms shorten and rings appear as difficulty rises.
+- Platforms are floating stone slabs (2 tiles thick) with open air below; falling off the bottom ends the run.
+- Each chunk is a platform then one obstacle: **beam** (gap 9–12 under a hanging wood beam ~6 above
+  the takeoff), **ring** (gap 8–10 with a ring ~5 above), **jump** (gap 2–3), **double** (gap 4–6),
+  **step** (a 1–2 tile ledge). Beam and ring gaps are wider than a double jump, so they need the grapple.
+  Gaps scale with speed; ledges move up to 3 down or 1 up.
+- The grapple leads: the first gap is always a beam (about 25 m in), beams are the most common obstacle,
+  and rings appear from ~45 m. Speed ramps 7 → 10.5 over 1,600 m; platforms shorten as it gets harder.
 - The camera leads 7.5 tiles so the next landing is on screen.
 - `tools/endless-check.js` checks every obstacle at the ends of its ranges and at both speeds and
   measures the timing window (minimum 28 frames).

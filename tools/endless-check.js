@@ -12,12 +12,12 @@ export function strip(kind, { gap, rise, speed = C.RUN_SPEED, seed = 1 } = {}) {
   gen.gy = 14;
   const cols = [];
   const rings = [];
-  for (let i = 0; i < 14; i++) { const c = new Uint8Array(ENDLESS_H); for (let y = gen.gy; y < ENDLESS_H; y++) c[y] = 4; cols.push(c); }
+  for (let i = 0; i < 14; i++) cols.push(gen.slab(gen.gy));
   const x0 = cols.length;
   const ch = gen.next(speed, 0, kind, { gap, rise, plat: 6 });
   cols.push(...ch.cols);
   ch.rings.forEach((r) => rings.push({ x: r.x + x0, y: r.y }));
-  for (let i = 0; i < 24; i++) { const c = new Uint8Array(ENDLESS_H); for (let y = gen.gy; y < ENDLESS_H; y++) c[y] = 4; cols.push(c); }
+  for (let i = 0; i < 24; i++) cols.push(gen.slab(gen.gy));
   const w = cols.length;
   const tiles = new Uint8Array(w * ENDLESS_H);
   for (let x = 0; x < w; x++) for (let y = 0; y < ENDLESS_H; y++) tiles[y * w + x] = cols[x][y];

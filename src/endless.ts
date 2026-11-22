@@ -7,7 +7,9 @@ import { Game, type Sfx } from './game';
 import { Tile, type Level, type Vec } from './level';
 
 export const ENDLESS_H = 22;
-const START_FLAT = 34;
+const START_FLAT = 14;
+/** Platform thickness: floating slabs with open air below (falling off the screen ends the run). */
+const SLAB = 2;
 const AHEAD = 90; // keep this many tiles generated ahead of the runner
 const BEST_KEY = 'whiplash.endless.best';
 
@@ -27,11 +29,12 @@ export type ObstacleKind = 'jump' | 'double' | 'step' | 'beam' | 'ring';
 
 /** Tunable ranges per obstacle, in tiles at base speed (gaps scale with speed). Checked by tools/endless-check.js. */
 export const OBSTACLES = {
-  jump: { gap: [2, 3], rise: [-2, 1] },
-  double: { gap: [4, 6], rise: [-2, 1] },
+  jump: { gap: [2, 3], rise: [-3, 1] },
+  double: { gap: [4, 6], rise: [-3, 1] },
   step: { rise: [1, 2] }, // no gap: a wall to hop up (2 needs the double jump)
-  beam: { gap: [7, 11], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
-  ring: { gap: [6, 9], rise: [-2, 0], ringAbove: 5 },
+  // Beam and ring gaps are wider than a double jump reaches, so they need the grapple.
+  beam: { gap: [9, 12], rise: [-2, 1], beamAbove: 6, beamLen: 6 },
+  ring: { gap: [8, 10], rise: [-2, 0], ringAbove: 5 },
 };
 
 export class EndlessGen {
@@ -45,25 +48,27 @@ export class EndlessGen {
 
   private ri(a: number, b: number) { return a + Math.floor(this.rand() * (b - a + 1)); }
 
-  private ground(gy: number): Uint8Array {
+  /** One column of a floating platform whose top row is gy. */
+  slab(gy: number): Uint8Array {
     const c = new Uint8Array(ENDLESS_H);
-    for (let y = gy; y < ENDLESS_H; y++) c[y] = Tile.Stone;
+    for (let y = gy; y < Math.min(ENDLESS_H, gy + SLAB); y++) c[y] = Tile.Stone;
     return c;
   }
 
   /** The opening runway. */
   start(): Uint8Array[] {
-    return Array.from({ length: START_FLAT }, () => this.ground(this.gy));
+    return Array.from({ length: START_FLAT }, () => this.slab(this.gy));
   }
 
   /** Pick an obstacle for this difficulty (0..1). */
   pick(d: number): ObstacleKind {
+    // The grapple is the star: beams from the first gap, rings almost right away.
     const w: [ObstacleKind, number][] = [
-      ['jump', 3],
-      ['double', d < 0.05 ? 0 : 2.5],
-      ['beam', d < 0.1 ? 0 : 2],
-      ['ring', d < 0.25 ? 0 : 1.5 + d],
-      ['step', 0.8],
+      ['beam', 3],
+      ['ring', d < 0.03 ? 0 : 2 + d],
+      ['jump', 1.5],
+      ['double', d < 0.03 ? 0 : 1.5],
+      ['step', 0.6],
     ];
     const total = w.reduce((s, [, n]) => s + n, 0);
     let r = this.rand() * total;
@@ -79,8 +84,8 @@ export class EndlessGen {
     const cols: Uint8Array[] = [];
     const rings: Vec[] = [];
     const k = speed / C.RUN_SPEED;
-    const platLen = params?.plat ?? this.ri(Math.round(10 - 4 * d), Math.round(18 - 8 * d));
-    for (let i = 0; i < platLen; i++) cols.push(this.ground(this.gy));
+    const platLen = params?.plat ?? this.ri(Math.round(7 - 2 * d), Math.round(13 - 5 * d));
+    for (let i = 0; i < platLen; i++) cols.push(this.slab(this.gy));
 
     const kind = force ?? this.pick(d);
     const clampRise = (rise: number) => {
@@ -102,7 +107,7 @@ export class EndlessGen {
       const from = startX + Math.max(0, Math.round(gap * 0.15));
       for (let i = 0; i < (o.beamLen ?? 6); i++) {
         const ci = from + i;
-        while (cols.length <= ci) cols.push(this.ground(takeoffGy - rise));
+        while (cols.length <= ci) cols.push(this.slab(takeoffGy - rise));
         cols[ci][row] = Tile.Wood;
       }
     }
@@ -119,6 +124,7 @@ export class EndlessRun {
   startX: number;
   best: number;
   private lastKinds: ObstacleKind[] = [];
+  private chunks = 0;
 
   constructor(sfx: (s: Sfx) => void, seed = (Math.random() * 2 ** 31) | 0) {
     this.gen = new EndlessGen(seed);
@@ -162,7 +168,8 @@ export class EndlessRun {
     const g = this.game;
     while (g.w - g.player.x < AHEAD) {
       // Avoid three of the same obstacle in a row.
-      let kind = this.gen.pick(this.difficulty);
+      // The very first gap is a grapple beam, so the hook is in play straight away.
+      let kind = this.chunks++ === 0 ? 'beam' : this.gen.pick(this.difficulty);
       if (this.lastKinds.length >= 2 && this.lastKinds.every((k) => k === kind)) kind = this.gen.pick(this.difficulty);
       const chunk = this.gen.next(g.runSpeed, this.difficulty, kind);
       this.lastKinds = [...this.lastKinds.slice(-1), chunk.kind];
