@@ -39,7 +39,7 @@ function setAimDeg(d: number) {
 
 function newRun(): EndlessRun {
   const r = new EndlessRun((s) => {
-    audio.play(s, s === 'spark' ? r.game.sparkStreak : 0);
+    audio.play(s);
     if (s === 'attach') input.rumble(0, 0.35, 60);
     else if (s === 'perfect') { input.rumble(0.2, 0.5, 90); renderer.punch(); }
     else if (s === 'death') input.rumble(0.8, 0.6, 280);
@@ -102,7 +102,7 @@ function onRunOver() {
   const farther = dist > run.bestDist && run.bestDist > 0;
   const best = run.finish();
   $('over-stats').textContent = best ? `${d}   — new best!` : `${d}   (best ${run.best})`;
-  const bits = [`${dist} m${farther ? ' (farthest yet)' : ''}`, `${g.perfects} perfect`, `${g.sparks} spark${g.sparks === 1 ? '' : 's'}`];
+  const bits = [`${dist} m${farther ? ' (farthest yet)' : ''}`, `${g.perfects} perfect`];
   $('over-detail').textContent = bits.join('  ·  ');
   show('over');
 }

@@ -4,7 +4,7 @@
 
 import * as C from './config';
 import { Game, type Sfx } from './game';
-import { Tile, type Beam, type Level, type Motion, type Ring, type Spark } from './level';
+import { Tile, type Beam, type Level, type Motion, type Ring } from './level';
 
 export const ENDLESS_H = 22;
 const START_FLAT = 14;
@@ -17,19 +17,7 @@ const LAST_DEATH_KEY = 'whiplash.endless.lastDeath';
 /** Before momentum scoring, the best was distance + chain metres: a fair first guess at the farthest run. */
 const OLD_BEST_KEY = 'whiplash.endless.best';
 
-/**
- * Spark arcs, relative to an anchor's home (a ring's centre, or the middle of a beam's underside): up and
- * ahead of it, where only a late, high release flies (measured with tools/endless-check.js at 7.5–13
- * tiles/s; enough of those swings still clear the gap). They ride along with the anchor's motion.
- */
-const SPARK_ARC = {
-  ring: [[6.5, -1.5], [8, -2.2], [9.5, -1.8]],
-  beam: [[7, -1], [8.5, -1.6], [10, -1.2]],
-  // Off the high ring: the long, low fling it gives (flying higher than this off it usually means falling).
-  high: [[8, 2], [10.5, 2], [13, 2]],
-};
-const SPARK_CHANCE = 0.45; // share of rings and beams that carry a spark arc (after the opening)
-/** The optional high route: a lone ring high over a long platform, with sparks past it. */
+/** The optional high route: a lone still ring high over a long platform. */
 const HIGH_RING = { above: 8.5, at: 2.5, minPlat: 8, chance: 0.4, from: 0.05 };
 
 /** Small seeded RNG (mulberry32). */
@@ -79,16 +67,15 @@ const MOVE_MIN = 0.6;
 /** Generator options (the checker forces these). */
 export type ChunkParams = {
   gap?: number; rise?: number; plat?: number; beamLen?: number; move?: number; phase?: number; vertical?: boolean;
-  /** Force spark arcs on (true) or off (false); also turns the high route on or off. */
-  sparks?: boolean;
+  /** Force the high-route ring on (true) or off (false). */
+  high?: boolean;
 };
 
 /** Chunk-relative rings and beams → world ones at column x0. */
-export function place(chunk: { rings: Ring[]; beams: Beam[]; sparks?: Spark[] }, x0: number) {
+export function place(chunk: { rings: Ring[]; beams: Beam[] }, x0: number) {
   return {
     rings: chunk.rings.map((r) => ({ ...r, x: r.x + x0, bx: r.bx + x0 })),
     beams: chunk.beams.map((b) => ({ ...b, x: b.x + x0, bx: b.bx + x0 })),
-    sparks: (chunk.sparks ?? []).map((k) => ({ ...k, x: k.x + x0, bx: k.bx + x0 })),
   };
 }
 
@@ -146,27 +133,19 @@ export class EndlessGen {
       const [p0, p1] = MOTION.period;
       return { ax: ax * scale, ay: ay * scale, period: p0 + this.rand() * (p1 - p0), phase: params?.phase ?? this.rand() * Math.PI * 2 };
     };
-    const sparks: Spark[] = [];
     const vertical = (chance: number) => params?.vertical ?? this.rand() < chance;
-    const wantSparks = (chance: number) => params?.sparks ?? (d > 0.02 && this.rand() < chance);
-    /** A spark arc around (hx, hy), moving with m. */
-    const arc = (pts: number[][], hx: number, hy: number, m?: Motion) => {
-      for (const [ox, oy] of pts) sparks.push({ x: hx + ox, y: hy + oy, bx: hx + ox, by: hy + oy, m, taken: false });
-    };
-    const ring = (x: number, y: number, withSparks = false) => {
+    const ring = (x: number, y: number) => {
       const m = vertical(MOTION.ringBobChance) ? motion(0, MOTION.ringBob) : motion(MOTION.ringSlide, 0);
       rings.push({ x, y, bx: x, by: y, m });
-      if (withSparks) arc(SPARK_ARC.ring, x, y, m);
     };
     const k = speed / C.RUN_SPEED;
     const platLen = params?.plat ?? this.ri(Math.round(7 - 2 * d), Math.round(13 - 5 * d));
     for (let i = 0; i < platLen; i++) cols.push(this.slab(this.gy));
-    // The high route: a still ring up near the top over a long platform. Swing from it (or catch it straight
-    // out of the last obstacle to keep a chain going) to fly the spark arc beyond. Walking under it is safe.
-    if (platLen >= HIGH_RING.minPlat && (params?.sparks ?? (d >= HIGH_RING.from && this.rand() < HIGH_RING.chance))) {
+    // The high route: a still ring up near the top over a long platform. Catch it straight out of the last
+    // obstacle to keep a chain going instead of landing. Walking under it is safe.
+    if (platLen >= HIGH_RING.minPlat && (params?.high ?? (d >= HIGH_RING.from && this.rand() < HIGH_RING.chance))) {
       const hx = HIGH_RING.at, hy = this.gy - HIGH_RING.above;
       rings.push({ x: hx, y: hy, bx: hx, by: hy });
-      arc(SPARK_ARC.high, hx, hy);
     }
 
     const kind = force ?? this.pick(d);
@@ -200,16 +179,15 @@ export class EndlessGen {
       const x = from + (m ? m.ax : 0), y = row + (m ? m.ay : 0);
       while (cols.length < Math.ceil(x + (m ? m.ax : 0)) + len) cols.push(this.slab(takeoffGy - rise));
       beams.push({ x, y, w: len, h: 1, bx: x, by: y, m, dx: 0, dy: 0 });
-      if (wantSparks(SPARK_CHANCE)) arc(SPARK_ARC.beam, x + len / 2, y + 1, m);
     }
     this.gy -= rise;
-    if (kind === 'ring') ring(startX + gap * 0.45, takeoffGy - (o.ringAbove ?? 5) + 0.5, wantSparks(SPARK_CHANCE)); // x relative to chunk start
+    if (kind === 'ring') ring(startX + gap * 0.45, takeoffGy - (o.ringAbove ?? 5) + 0.5); // x relative to chunk start
     if (kind === 'chain') {
       const ry = takeoffGy - (o.ringAbove ?? 5) + 0.5;
       ring(startX + gap * 0.27, ry);
-      ring(startX + gap * (o.ring2At ?? 0.68), ry, wantSparks(SPARK_CHANCE));
+      ring(startX + gap * (o.ring2At ?? 0.68), ry);
     }
-    return { cols, rings, beams, sparks, kind, gap, rise };
+    return { cols, rings, beams, kind, gap, rise };
   }
 }
 
@@ -240,7 +218,7 @@ export class EndlessRun {
       name: 'Endless',
       hint: 'Tap left to jump (again in the air to double jump). Tap right to grapple.',
       w: cols.length, h: ENDLESS_H, tiles: new Uint8Array(cols.length * ENDLESS_H),
-      start: { x: 4, y: this.gen.gy }, rings: [], beams: [], sparks: [],
+      start: { x: 4, y: this.gen.gy }, rings: [], beams: [],
     };
     for (let x = 0; x < cols.length; x++) for (let y = 0; y < ENDLESS_H; y++) level.tiles[y * cols.length + x] = cols[x][y];
     this.game = new Game(level, sfx);
@@ -301,7 +279,7 @@ export class EndlessRun {
       const chunk = this.gen.next(this.baseSpeed, this.difficulty, kind);
       this.lastKinds = [...this.lastKinds.slice(-1), chunk.kind];
       const placed = place(chunk, g.w);
-      g.appendColumns(chunk.cols, placed.rings, placed.beams, placed.sparks);
+      g.appendColumns(chunk.cols, placed.rings, placed.beams);
     }
   }
 

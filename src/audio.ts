@@ -64,8 +64,7 @@ export class Audio {
     else this.tone('triangle', 660, 660, 0.09, 0.08);
   }
 
-  /** n: for 'spark', the pickup streak (each one in a row chimes a step higher). */
-  play(s: Sfx, n = 0) {
+  play(s: Sfx) {
     if (!this.ctx || this.muted) return;
     switch (s) {
       case 'fire': this.noise(0.12, 0.25, 2500, 0.8); this.tone('triangle', 900, 300, 0.1, 0.08); break;
@@ -76,13 +75,6 @@ export class Audio {
       case 'jump': this.noise(0.06, 0.18, 1400, 1.2); this.tone('triangle', 260, 520, 0.09, 0.07); break;
       case 'perfect': this.tone('triangle', 880, 1320, 0.12, 0.1); this.tone('sine', 1760, 1760, 0.22, 0.05, 0.05); break;
       case 'chain': [660, 880, 1100].forEach((f, i) => this.tone('triangle', f, f, 0.12, 0.08, i * 0.06)); break;
-      case 'spark': {
-        // A major-pentatonic ladder: A5, B5, C#6, E6, F#6, A6, …
-        const deg = [0, 2, 4, 7, 9][(n - 1) % 5] + 12 * Math.floor((n - 1) / 5);
-        const f = 880 * Math.pow(2, Math.min(24, deg) / 12);
-        this.tone('sine', f, f, 0.14, 0.07); this.tone('triangle', f * 2, f * 2, 0.06, 0.025);
-        break;
-      }
       case 'best': [523, 659, 784, 1047].forEach((f, i) => this.tone('square', f, f, 0.16, 0.05, i * 0.08)); break;
     }
   }

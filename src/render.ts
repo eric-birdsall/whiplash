@@ -136,7 +136,6 @@ export class Renderer {
     this.drawTiles(g);
     this.drawBeams(g);
     this.drawRings(g);
-    this.drawSparks(g, now / 1000);
     if (!g.player.dead) this.drawTrail(g);
     if (opts.aim && !g.player.dead) this.drawAim(g, opts.aim);
     const pose = computePose(g, opts.aim);
@@ -312,29 +311,6 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(r.x, r.y, C.RING_RADIUS, 0, Math.PI * 2);
       ctx.stroke();
-    }
-  }
-
-  /** Sparks: spinning gold four-point stars. */
-  private drawSparks(g: Game, t: number) {
-    const { ctx } = this;
-    for (const k of g.level.sparks ?? []) {
-      if (k.taken || k.x < this.camX - 1 || k.x > this.camX + this.vw + 1) continue;
-      const pulse = 1 + 0.15 * Math.sin(t * 6 + k.bx);
-      const r = 0.34 * pulse, a = t * 2.2 + k.bx;
-      ctx.fillStyle = 'rgba(255,227,107,0.22)';
-      ctx.beginPath();
-      ctx.arc(k.x, k.y, r * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = COL.perfect;
-      ctx.beginPath();
-      for (let i = 0; i < 8; i++) {
-        const rr = i % 2 ? r * 0.38 : r;
-        const aa = a + (i * Math.PI) / 4;
-        ctx.lineTo(k.x + Math.cos(aa) * rr, k.y + Math.sin(aa) * rr);
-      }
-      ctx.closePath();
-      ctx.fill();
     }
   }
 

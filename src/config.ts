@@ -72,13 +72,8 @@ export const MOM_SCORE = 1; // full momentum doubles points
 export const MOM_CATCH = 0.06; // per rope catch
 export const MOM_PERFECT = 0.07; // extra per perfect release
 export const MOM_CHAIN = 0.03; // per extra link when landing a chain
-export const MOM_SPARK = 0.03; // per spark picked up
 export const MOM_GRACE = 0.5; // seconds on the ground before momentum starts draining
 export const MOM_DECAY = 0.11; // per second on the ground after the grace
-
-// Sparks: pickups along the arcs that only a great swing (or the optional high route) reaches.
-export const SPARK_RADIUS = 0.7; // pickup distance from the hero's centre
-export const SPARK_BONUS = 3; // bonus metres each (multiplied by momentum like everything else)
 
 // Camera: zooms out as speed rises (view size × up to 1 + ZOOM_OUT at ZOOM_AT tiles/s and over).
 export const ZOOM_OUT = 0.14;

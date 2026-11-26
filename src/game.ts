@@ -1,5 +1,5 @@
 import * as C from './config';
-import { Beam, Level, Ring, Spark, Tile, Vec, motionOffset } from './level';
+import { Beam, Level, Ring, Tile, Vec, motionOffset } from './level';
 import { Box, Grid, boxHitsGrid, moveAxis, overlaps, rayBox, raycastGrid, rayCircle } from './physics';
 
 export const MAT_WOOD = 1;
@@ -25,7 +25,7 @@ export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; grav: number;
 }
 
-export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain' | 'spark' | 'best';
+export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain' | 'best';
 
 /** A locked spot on a mover: (ox, oy) from its x, y (a ring's centre, or a point on a beam's underside). */
 export type AimTarget = { on: Ring | Beam; ox: number; oy: number };
@@ -83,9 +83,6 @@ export class Game implements Grid {
   momentum = 0;
   /** Seconds since last leaving the ground (0 while airborne). */
   private groundTime = 0;
-  /** Sparks picked up this run, and how many in a row since last touching the ground (raises the chime). */
-  sparks = 0;
-  sparkStreak = 0;
   /** Seconds into the double-jump front tuck, or -1 when not flipping (cosmetic). */
   flipT = -1;
 
@@ -98,7 +95,6 @@ export class Game implements Grid {
       vx: 0, vy: 0, grounded: false, facing: 1, dead: false,
     };
     this.level.beams ??= [];
-    this.level.sparks ??= [];
     this.updateMovers(true);
   }
 
@@ -106,7 +102,7 @@ export class Game implements Grid {
    * Append columns on the right. Each column is h tile values, top to bottom.
    * Rings far behind the player are dropped so hook raycasts stay cheap.
    */
-  appendColumns(cols: Uint8Array[], rings: Ring[], beams: Beam[] = [], sparks: Spark[] = []) {
+  appendColumns(cols: Uint8Array[], rings: Ring[], beams: Beam[] = []) {
     const oldW = this.w, h = this.h, nw = oldW + cols.length;
     const t = new Uint8Array(nw * h);
     for (let y = 0; y < h; y++) {
@@ -118,7 +114,6 @@ export class Game implements Grid {
     const cutoff = this.player.x - 40;
     this.level.rings = this.level.rings.filter((r) => r.x > cutoff).concat(rings);
     this.level.beams = this.level.beams.filter((b) => b.x + b.w > cutoff).concat(beams);
-    this.level.sparks = this.level.sparks!.filter((k) => k.x > cutoff && !k.taken).concat(sparks);
     this.updateMovers(true);
   }
 
@@ -136,10 +131,6 @@ export class Game implements Grid {
     for (const r of this.level.rings) {
       const o = motionOffset(r.m, t);
       r.x = r.bx + o.x; r.y = r.by + o.y;
-    }
-    for (const k of this.level.sparks!) {
-      const o = motionOffset(k.m, t);
-      k.x = k.bx + o.x; k.y = k.by + o.y;
     }
     const p = this.player;
     for (const b of this.level.beams) {
@@ -244,28 +235,11 @@ export class Game implements Grid {
       this.flipT += dt;
       if (this.flipT >= C.FLIP_TIME || p.grounded || this.hook.kind !== 'idle') this.flipT = -1;
     }
-    this.collectSparks();
     if (p.y > this.h + 1) this.kill('fell');
     this.checkPinned(dt);
   }
 
   private addMomentum(n: number) { this.momentum = Math.max(0, Math.min(1, this.momentum + n)); }
-
-  /** Pick up any spark the hero touches: bonus metres, a little momentum, and a chime that climbs per streak. */
-  private collectSparks() {
-    const c = this.center();
-    for (const k of this.level.sparks!) {
-      if (k.taken || Math.abs(k.x - c.x) > C.SPARK_RADIUS + 0.5) continue;
-      if (Math.hypot(k.x - c.x, k.y - c.y) > C.SPARK_RADIUS) continue;
-      k.taken = true;
-      this.sparks++;
-      this.sparkStreak++;
-      this.bonus += C.SPARK_BONUS;
-      this.addMomentum(C.MOM_SPARK);
-      this.burst(k.x, k.y, 8, '#ffe36b', 4, 2);
-      this.sfx('spark');
-    }
-  }
 
   /**
    * The aim: a fixed 60° shot up and forward. If it would miss, bend up to AIM_ASSIST toward the
@@ -521,7 +495,7 @@ export class Game implements Grid {
         this.sfx('chain');
       }
     }
-    if (p.grounded && !anchored) { this.swung = false; this.links = 0; this.sparkStreak = 0; }
+    if (p.grounded && !anchored) { this.swung = false; this.links = 0; }
     // Momentum drains while you stay on the ground (after a short grace), never in the air.
     this.groundTime = p.grounded ? this.groundTime + dt : 0;
     if (this.groundTime > C.MOM_GRACE) this.addMomentum(-C.MOM_DECAY * dt);
