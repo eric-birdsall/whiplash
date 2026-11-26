@@ -80,10 +80,6 @@ export const MOM_DECAY = 0.11; // per second on the ground after the grace
 export const SPARK_RADIUS = 0.7; // pickup distance from the hero's centre
 export const SPARK_BONUS = 3; // bonus metres each (multiplied by momentum like everything else)
 
-// Perfect release flourish: a short slow-motion beat (real seconds) and a camera punch-in.
-export const SLOWMO_TIME = 0.22;
-export const SLOWMO_SCALE = 0.35;
-
 // Camera: zooms out as speed rises (view size × up to 1 + ZOOM_OUT at ZOOM_AT tiles/s and over).
 export const ZOOM_OUT = 0.14;
 export const ZOOM_FROM = 8.5;

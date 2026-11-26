@@ -22,8 +22,6 @@ const ANGLE_KEY = 'whiplash.aimAngle';
 const ANGLE_DEFAULT = (C.AUTO_AIM_ANGLE * 180) / Math.PI;
 const ANGLE_MIN = 20, ANGLE_MAX = 75, ANGLE_STEP = 2.5;
 let aimDeg = Number(localStorage.getItem(ANGLE_KEY)) || ANGLE_DEFAULT;
-/** Real seconds of slow motion left (a perfect release). */
-let slowmo = 0;
 /** The current run. A fresh one sits behind the title screen as a backdrop. */
 let run = newRun();
 
@@ -43,11 +41,10 @@ function newRun(): EndlessRun {
   const r = new EndlessRun((s) => {
     audio.play(s, s === 'spark' ? r.game.sparkStreak : 0);
     if (s === 'attach') input.rumble(0, 0.35, 60);
-    else if (s === 'perfect') { input.rumble(0.2, 0.5, 90); slowmo = C.SLOWMO_TIME; renderer.punch(); }
+    else if (s === 'perfect') { input.rumble(0.2, 0.5, 90); renderer.punch(); }
     else if (s === 'death') input.rumble(0.8, 0.6, 280);
   });
   r.game.aimAngle = (aimDeg * Math.PI) / 180;
-  slowmo = 0;
   renderer.resize();
   renderer.snapCamera(r.game);
   return r;
@@ -233,9 +230,7 @@ function frame(now: number) {
     if (st.pause) show('pause');
     else if (st.restart) startRun();
     else {
-      // A perfect release slows time for a moment.
-      acc += dt * (slowmo > 0 ? C.SLOWMO_SCALE : 1);
-      slowmo = Math.max(0, slowmo - dt);
+      acc += dt;
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
       stepped = false;

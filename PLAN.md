@@ -117,7 +117,7 @@ the hook head is an arcade-crane claw that opens in flight and clamps shut when 
 
 ## Feel
 
-- **Perfect release:** 0.22 s of slow motion (×0.35) and a quick camera punch-in.
+- **Perfect release:** a quick camera punch-in (no slow motion: tried it, it broke the flow).
 - **Zoom:** the view widens with run speed, from 32 × 18 tiles at 8.5 tiles/s to ×1.14 at 13.
 - **Speed lines** stream past above 10.5 tiles/s.
 - **Course markers:** a gold dashed line and **BEST n m** pennant at your farthest distance, and a faint red line at where the
