@@ -97,6 +97,28 @@ button:disabled { opacity: 0.35; cursor: default; }
   opacity: 0.7;
 }
 
+/* Resume countdown: a big number over the live, unblurred scene. */
+#countdown {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-size: clamp(90px, 30vmin, 220px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffc93c;
+  text-shadow: 0 6px 0 #8a5a34, 0 0 30px rgba(0, 0, 0, 0.6);
+}
+#countdown.pop { animation: count-pop 1s ease-out both; }
+@keyframes count-pop {
+  0% { transform: scale(1.6); opacity: 0; }
+  15% { transform: scale(1); opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.25; }
+}
+
 #rotate {
   position: fixed;
   inset: 0;
@@ -113,6 +135,8 @@ button:disabled { opacity: 0.35; cursor: default; }
 
 body.touch .desktop-only { display: none; }
 body:not(.touch) .touch-only { display: none; }
+body.pad .desktop-only, body.pad .touch-only, body:not(.pad) .pad-only { display: none; }
+body.pad button.pad-focus { outline: 3px solid #fff; outline-offset: 3px; }
 
 /* Short landscape phones: keep the title stack on screen. */
 @media (max-height: 420px) {

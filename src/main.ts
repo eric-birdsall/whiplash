@@ -5,7 +5,10 @@ import { Audio } from './audio';
 import { EndlessRun } from './endless';
 import type { Game } from './game';
 
-type Screen = 'title' | 'play' | 'dying' | 'pause' | 'over';
+type Screen = 'title' | 'play' | 'dying' | 'pause' | 'countdown' | 'over';
+
+/** Seconds of 3-2-1 over the frozen (unblurred) run before play resumes after a pause. */
+const RESUME_COUNT = 3;
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
@@ -35,7 +38,12 @@ function setAimDeg(d: number) {
 }
 
 function newRun(): EndlessRun {
-  const r = new EndlessRun((s) => audio.play(s));
+  const r = new EndlessRun((s) => {
+    audio.play(s);
+    if (s === 'attach') input.rumble(0, 0.35, 60);
+    else if (s === 'perfect') input.rumble(0.2, 0.5, 90);
+    else if (s === 'death') input.rumble(0.8, 0.6, 280);
+  });
   r.game.aimAngle = (aimDeg * Math.PI) / 180;
   renderer.resize();
   renderer.snapCamera(r.game);
@@ -48,13 +56,38 @@ const $ = (id: string) => document.getElementById(id)!;
 const screens: Record<'title' | 'pause' | 'over', HTMLElement> = { title: $('title'), pause: $('pause'), over: $('over') };
 
 function show(s: Screen) {
+  const from = screen;
   screen = s;
+  setPadFocus(null);
   (document.activeElement as HTMLElement | null)?.blur?.(); // Space must never click a menu button mid-run
   for (const [k, el] of Object.entries(screens)) el.classList.toggle('hidden', k !== s);
-  $('pause-btn').classList.toggle('hidden', s !== 'play');
-  input.releaseAll();
+  $('pause-btn').classList.toggle('hidden', s !== 'play' && s !== 'countdown');
+  $('countdown').classList.toggle('hidden', s !== 'countdown');
+  if (s === 'countdown') { countdownEnd = performance.now() + RESUME_COUNT * 1000; countdownShown = -1; }
+  // Leaving the countdown keeps what's held, so the player can already be holding grapple when play resumes.
+  if (!(from === 'countdown' && s === 'play')) input.releaseAll();
   if (s === 'pause') $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`;
   if (s === 'title') $('title-best').textContent = run.best > 0 ? `Best: ${run.best} m` : '';
+}
+
+let countdownEnd = 0;
+let countdownShown = -1;
+
+/** Pause → play goes through a 3-2-1 over the live scene so the player can find their place first. */
+function resume() { show('countdown'); }
+
+/** Update the countdown number (with a blip and a pop as each one appears); starts play at zero. */
+function tickCountdown(now: number) {
+  const left = Math.ceil((countdownEnd - now) / 1000);
+  if (left <= 0) { audio.countdown(true); show('play'); return; }
+  if (left === countdownShown) return;
+  countdownShown = left;
+  const el = $('countdown');
+  el.textContent = String(left);
+  el.classList.remove('pop');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('pop');
+  audio.countdown(false);
 }
 
 function startRun() {
@@ -76,7 +109,7 @@ document.addEventListener('click', (e) => {
   switch (action) {
     case 'play': startRun(); break;
     case 'title': run = newRun(); show('title'); break;
-    case 'resume': show('play'); break;
+    case 'resume': resume(); break;
     case 'restart': startRun(); break;
     case 'hard-reload': hardReload(); break;
     case 'angle-down': setAimDeg(aimDeg - ANGLE_STEP); break;
@@ -84,6 +117,33 @@ document.addEventListener('click', (e) => {
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
   }
 });
+// ---------- Controller on menus ----------
+// D-pad / left stick up-down moves between buttons, left-right sets the grapple angle, A presses
+// (the highlighted button, else the main one), B resumes from Pause. Menu toggles Pause in the loop.
+
+let padFocus: HTMLButtonElement | null = null;
+function setPadFocus(b: HTMLButtonElement | null) {
+  padFocus?.classList.remove('pad-focus');
+  padFocus = b;
+  b?.classList.add('pad-focus');
+}
+
+function padOnMenu() {
+  if (screen !== 'title' && screen !== 'pause' && screen !== 'over') return;
+  const p = input.padMenu, el = screens[screen];
+  const buttons = [...el.querySelectorAll<HTMLButtonElement>('button:not(.link)')].filter((b) => !b.closest('.stepper'));
+  if (p.up || p.down) {
+    const i = padFocus ? buttons.indexOf(padFocus) : -1;
+    setPadFocus(i < 0 ? buttons[0] : buttons[(i + (p.down ? 1 : -1) + buttons.length) % buttons.length]);
+  }
+  if (el.querySelector('.stepper')) {
+    if (p.left) setAimDeg(aimDeg - ANGLE_STEP);
+    if (p.right) setAimDeg(aimDeg + ANGLE_STEP);
+  }
+  if (p.confirm) (padFocus ?? el.querySelector<HTMLButtonElement>('button.primary'))?.click();
+  else if (p.back && screen === 'pause') resume();
+}
+
 $('pause-btn').addEventListener('pointerdown', (e) => { e.stopPropagation(); show('pause'); });
 
 /** Throw away the offline cache and service worker, then load the newest deploy from the network. */
@@ -114,12 +174,12 @@ function checkOrientation() {
   document.body.classList.toggle('touch', touch);
   const block = touch && innerHeight > innerWidth;
   $('rotate').classList.toggle('hidden', !block);
-  if (block && screen === 'play') show('pause');
+  if (block && (screen === 'play' || screen === 'countdown')) show('pause');
 }
 
 addEventListener('resize', () => { renderer.resize(); checkOrientation(); });
 addEventListener('orientationchange', () => setTimeout(() => { renderer.resize(); checkOrientation(); }, 100));
-document.addEventListener('visibilitychange', () => { if (document.hidden && screen === 'play') show('pause'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && (screen === 'play' || screen === 'countdown')) show('pause'); });
 canvas.addEventListener('pointerdown', () => checkOrientation());
 
 // ---------- Loop ----------
@@ -157,6 +217,8 @@ function frame(now: number) {
   input.poll();
   const st = input.state;
   const game = run.game;
+  if (input.padActivity) audio.unlock();
+  if (document.body.classList.contains('pad') !== input.padMode) document.body.classList.toggle('pad', input.padMode);
 
   if (screen === 'play') {
     if (st.pause) show('pause');
@@ -180,8 +242,14 @@ function frame(now: number) {
       }
     }
   } else if (st.pause && screen === 'pause') {
-    show('play');
+    resume();
+  } else if (screen === 'countdown') {
+    acc = 0;
+    if (st.pause) show('pause');
+    else if (st.restart) startRun();
+    else tickCountdown(now);
   } else {
+    padOnMenu();
     acc = 0;
     if (screen === 'dying') game.update(dt, false, false, false); // particles only
   }
@@ -192,7 +260,7 @@ function frame(now: number) {
   renderer.updateCamera(run.game, dt);
   renderer.draw(run.game, {
     aim: screen === 'play' ? run.game.assistAim() : null,
-    touch: input.touchMode && (screen === 'play' || screen === 'dying'),
+    touch: input.touchMode && !input.padMode && (screen === 'play' || screen === 'dying' || screen === 'countdown'),
     zones: input.heldZones(),
   });
   restore();

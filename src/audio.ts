@@ -57,6 +57,13 @@ export class Audio {
     s.stop(t + dur + 0.02);
   }
 
+  /** Resume countdown: a short blip per number, higher on "go". */
+  countdown(go: boolean) {
+    if (!this.ctx || this.muted) return;
+    if (go) this.tone('triangle', 1320, 1320, 0.16, 0.09);
+    else this.tone('triangle', 660, 660, 0.09, 0.08);
+  }
+
   play(s: Sfx) {
     if (!this.ctx || this.muted) return;
     switch (s) {

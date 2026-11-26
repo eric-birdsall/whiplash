@@ -25,6 +25,11 @@ at the bottom corners. Portrait shows a "rotate your device" notice.
 
 **Desktop:** W jump · E or click (anywhere) to grapple, hold to swing · R restart · Esc pause.
 
+**Controller** (Xbox / standard layout, Gamepad API): A or LB jump · RT, RB, X or B grapple, hold to swing ·
+View restart · Menu pause. On menus: d-pad or left stick up/down picks a button, left/right sets the
+grapple angle, A presses (the main button if none is picked), B resumes. Light rumble on a catch and a
+perfect release, a strong one on death. Using a controller swaps the controls line and hides the touch zones.
+
 ## Moves
 
 - **Run:** always to the right. Speed ramps from 7 to 10.5 tiles/s over the first 1,600 m.
@@ -96,7 +101,7 @@ the hook head is an arcade-crane claw that opens in flight and clamps shut when 
 ## Screen
 
 Landscape, fixed 32 × 18-tile view (zoomed out), letterboxed. The HUD is sized from the screen, not the tiles. Title: **Run**, best distance, controls, and in the
-top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Menu.
+top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Menu. Resuming shows the frozen, unblurred run under a 3-2-1 countdown (a blip per number) before play continues.
 Both title and pause have a **Grapple angle − / +** playtest option (20–75° in 2.5° steps, default 60°, saved
 in `localStorage` `whiplash.aimAngle`; a change from Pause applies to the current run). The checker always uses the default.
 Run over: distance (and new best), Run again, Menu.
@@ -126,7 +131,7 @@ src/
   render.ts      camera, tiles, beams, rings, motion tracks, aim guide, rope + claw, HUD, touch zones
   hero.ts        the commando: pose and drawing
   claw.ts        the arcade-crane claw
-  input.ts       keyboard / mouse / touch → InputState
+  input.ts       keyboard / mouse / touch / controller → InputState
   audio.ts       synthesized sound effects
   config.ts      every tuning constant
 tools/

@@ -19,6 +19,7 @@
   <canvas id="game"></canvas>
 
   <button id="pause-btn" class="hidden" aria-label="Pause">❚❚</button>
+  <div id="countdown" class="hidden" aria-live="assertive"></div>
 
   <div id="title" class="screen">
     <h1>WHIPLASH</h1>
@@ -31,6 +32,7 @@
       <button type="button" data-action="angle-up" aria-label="Raise grapple angle">+</button>
     </div>
     <p class="controls desktop-only">W to jump (again in the air to double jump) · E or click to grapple, hold to swing · R restart · Esc pause</p>
+    <p class="controls pad-only">A to jump (again in the air to double jump) · RT, RB, X or B to grapple, hold to swing · View restart · Menu pause</p>
     <p class="controls touch-only">Tap the left half to jump (again in the air to double jump) · Tap the right half to grapple, hold to swing</p>
     <p class="build"><span id="build-info"></span> · <button type="button" class="link" data-action="hard-reload">⟳ Reload latest</button></p>
   </div>
