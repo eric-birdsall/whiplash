@@ -20,6 +20,9 @@ export interface Ring { x: number; y: number; bx: number; by: number; m?: Motion
  */
 export interface Beam { x: number; y: number; w: number; h: number; bx: number; by: number; m?: Motion; dx: number; dy: number }
 
+/** A pickup. Moves with the anchor it belongs to (same Motion), so its arc stays reachable. */
+export interface Spark { x: number; y: number; bx: number; by: number; m?: Motion; taken: boolean }
+
 export interface Level {
   name: string;
   hint?: string;
@@ -29,6 +32,7 @@ export interface Level {
   start: Vec; // feet position
   rings: Ring[];
   beams: Beam[];
+  sparks?: Spark[];
 }
 
 /** Where a moving thing's home is offset to at time t. */

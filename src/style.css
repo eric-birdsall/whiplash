@@ -48,7 +48,8 @@ h2 { margin: 0 0 8px; font-size: clamp(26px, 6vmin, 40px); }
 .tag { margin: 0 0 14px; opacity: 0.8; font-size: 18px; }
 .controls { opacity: 0.6; font-size: 14px; margin-top: 14px; max-width: 520px; }
 .best { margin: 8px 0 0; opacity: 0.75; font-weight: 600; min-height: 1.2em; }
-#over-stats { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
+#over-stats { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+#over-detail { font-size: 15px; opacity: 0.75; margin: 0 0 14px; }
 .build {
   position: absolute;
   left: max(14px, env(safe-area-inset-left));

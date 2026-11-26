@@ -30,6 +30,25 @@ export class Renderer {
   camY = 0;
   dpr = 1;
   private stars: { x: number; y: number; r: number; d: number }[] = [];
+  /** View size multiplier (1 = VIEW_W × VIEW_H tiles; bigger = zoomed out). Eases toward speed's target. */
+  zoom = 1;
+  private punchT = 0;
+  /** Recent hero centres, newest last (the momentum trail). */
+  private trail: Vec[] = [];
+
+  /** Visible world size in tiles right now. */
+  get vw() { return C.VIEW_W * this.zoom; }
+  get vh() { return C.VIEW_H * this.zoom; }
+  /** Device pixels per world tile right now. */
+  get sc() { return this.ppt / this.zoom; }
+
+  /** Perfect release: a quick camera punch-in. */
+  punch() { this.punchT = 1; }
+
+  private zoomTarget(g: Game) {
+    const f = Math.min(1, Math.max(0, (g.runSpeed - C.ZOOM_FROM) / (C.ZOOM_AT - C.ZOOM_FROM)));
+    return 1 + C.ZOOM_OUT * f;
+  }
 
   constructor(public canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -50,29 +69,50 @@ export class Renderer {
 
   /** Snap the camera onto the player (call on level start / respawn). */
   snapCamera(g: Game) {
+    this.zoom = this.zoomTarget(g);
+    this.punchT = 0;
+    this.trail = [];
     const t = this.cameraTarget(g);
     this.camX = t.x; this.camY = t.y;
   }
 
   private cameraTarget(g: Game): Vec {
     const c = g.center();
-    let x = c.x - C.VIEW_W / 2 + g.cameraLead;
-    let y = c.y - C.VIEW_H / 2 - 0.5;
-    x = g.w <= C.VIEW_W ? (g.w - C.VIEW_W) / 2 : Math.max(0, Math.min(g.w - C.VIEW_W, x));
-    y = g.h <= C.VIEW_H ? (g.h - C.VIEW_H) / 2 : Math.max(0, Math.min(g.h - C.VIEW_H, y));
+    const vw = this.vw, vh = this.vh;
+    let x = c.x - vw / 2 + g.cameraLead;
+    let y = c.y - vh / 2 - 0.5;
+    x = g.w <= vw ? (g.w - vw) / 2 : Math.max(0, Math.min(g.w - vw, x));
+    y = g.h <= vh ? (g.h - vh) / 2 : Math.max(0, Math.min(g.h - vh, y));
     return { x, y };
   }
 
   updateCamera(g: Game, dt: number) {
     if (g.player.dead) return;
+    // Zoom out with speed (slowly), punch in on a perfect release (quickly, then ease back).
+    // Zooming about the view centre keeps the hero steady on screen.
+    this.punchT = Math.max(0, this.punchT - dt / 0.45);
+    const want = this.zoomTarget(g) - 0.07 * Math.sin(this.punchT * Math.PI * 0.5);
+    const z0 = this.zoom;
+    this.zoom += (want - this.zoom) * (1 - Math.exp(-(this.punchT > 0 ? 10 : 1.5) * dt));
+    this.camX -= (C.VIEW_W * (this.zoom - z0)) / 2;
+    this.camY -= (C.VIEW_H * (this.zoom - z0)) / 2;
     const t = this.cameraTarget(g);
     const k = 1 - Math.exp(-6 * dt);
     this.camX += (t.x - this.camX) * k;
     this.camY += (t.y - this.camY) * k;
   }
 
-  draw(g: Game, opts: { aim: Vec | null; touch: boolean; zones: { jump: boolean; hook: boolean } }) {
+  draw(g: Game, opts: {
+    aim: Vec | null; touch: boolean; zones: { jump: boolean; hook: boolean };
+    /** Course markers (world x): the farthest run ever and where the last run ended. */
+    markers?: { best?: { x: number; m: number }; last?: { x: number; m: number } };
+  }) {
     const { ctx, canvas } = this;
+    const now = performance.now();
+    if (!g.player.dead) {
+      this.trail.push(g.center());
+      if (this.trail.length > 16) this.trail.shift();
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#05070c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -87,21 +127,27 @@ export class Renderer {
 
     // World transform
     ctx.translate(this.ox, this.oy);
-    ctx.scale(this.ppt, this.ppt);
+    ctx.scale(this.sc, this.sc);
     ctx.translate(-this.camX, -this.camY);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
+    if (opts.markers) this.drawMarkers(opts.markers);
     this.drawTiles(g);
     this.drawBeams(g);
     this.drawRings(g);
+    this.drawSparks(g, now / 1000);
+    if (!g.player.dead) this.drawTrail(g);
     if (opts.aim && !g.player.dead) this.drawAim(g, opts.aim);
     const pose = computePose(g, opts.aim);
     this.drawRope(g, pose);
     if (!g.player.dead) this.drawPlayer(g, pose);
     this.drawParticles(g);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.drawSpeedLines(g, now / 1000, vw, vh);
     ctx.restore();
 
+    if (opts.markers) this.drawMarkerLabels(opts.markers);
     this.drawPopups(g);
     this.drawHud(g);
     if (opts.touch) this.drawZones(opts.zones);
@@ -153,7 +199,7 @@ export class Renderer {
     ctx.moveTo(this.ox, this.oy + vh);
     for (let i = 0; i <= 40; i++) {
       const x = (i / 40) * vw;
-      const wx = x / this.ppt + this.camX * 0.3;
+      const wx = x / this.sc + this.camX * 0.3;
       ctx.lineTo(this.ox + x, this.oy + vh * 0.72 + Math.sin(wx * 0.35) * vh * 0.05 + Math.sin(wx * 0.9) * vh * 0.02);
     }
     ctx.lineTo(this.ox + vw, this.oy + vh);
@@ -162,8 +208,8 @@ export class Renderer {
 
   private drawTiles(g: Game) {
     const { ctx } = this;
-    const x0 = Math.max(0, Math.floor(this.camX) - 1), x1 = Math.min(g.w - 1, Math.ceil(this.camX + C.VIEW_W) + 1);
-    const y0 = Math.max(0, Math.floor(this.camY) - 1), y1 = Math.min(g.h - 1, Math.ceil(this.camY + C.VIEW_H) + 1);
+    const x0 = Math.max(0, Math.floor(this.camX) - 1), x1 = Math.min(g.w - 1, Math.ceil(this.camX + this.vw) + 1);
+    const y0 = Math.max(0, Math.floor(this.camY) - 1), y1 = Math.min(g.h - 1, Math.ceil(this.camY + this.vh) + 1);
 
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
@@ -230,7 +276,7 @@ export class Renderer {
   private drawBeams(g: Game) {
     const { ctx } = this;
     for (const b of g.level.beams) {
-      if (b.x + b.w < this.camX - 3 || b.x > this.camX + C.VIEW_W + 3) continue;
+      if (b.x + b.w < this.camX - 3 || b.x > this.camX + this.vw + 3) continue;
       this.drawTrack(b.m, b.bx + b.w / 2, b.by + b.h / 2);
       ctx.fillStyle = COL.wood;
       ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -254,7 +300,7 @@ export class Renderer {
   private drawRings(g: Game) {
     const { ctx } = this;
     for (const r of g.level.rings) {
-      if (r.x < this.camX - 2 || r.x > this.camX + C.VIEW_W + 2) continue;
+      if (r.x < this.camX - 2 || r.x > this.camX + this.vw + 2) continue;
       this.drawTrack(r.m, r.bx, r.by);
       ctx.strokeStyle = 'rgba(125,240,255,0.25)';
       ctx.lineWidth = 0.22;
@@ -266,6 +312,121 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(r.x, r.y, C.RING_RADIUS, 0, Math.PI * 2);
       ctx.stroke();
+    }
+  }
+
+  /** Sparks: spinning gold four-point stars. */
+  private drawSparks(g: Game, t: number) {
+    const { ctx } = this;
+    for (const k of g.level.sparks ?? []) {
+      if (k.taken || k.x < this.camX - 1 || k.x > this.camX + this.vw + 1) continue;
+      const pulse = 1 + 0.15 * Math.sin(t * 6 + k.bx);
+      const r = 0.34 * pulse, a = t * 2.2 + k.bx;
+      ctx.fillStyle = 'rgba(255,227,107,0.22)';
+      ctx.beginPath();
+      ctx.arc(k.x, k.y, r * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = COL.perfect;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const rr = i % 2 ? r * 0.38 : r;
+        const aa = a + (i * Math.PI) / 4;
+        ctx.lineTo(k.x + Math.cos(aa) * rr, k.y + Math.sin(aa) * rr);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  /** Behind the hero once momentum builds: a fading ribbon, cyan turning gold at full momentum. */
+  private drawTrail(g: Game) {
+    const m = g.momentum;
+    if (m < 0.25 || this.trail.length < 3) return;
+    const { ctx } = this;
+    const k = (m - 0.25) / 0.75;
+    const col = k > 0.85 ? '255,227,107' : '125,240,255';
+    const n = this.trail.length;
+    for (let i = 1; i < n; i++) {
+      const f = i / n;
+      ctx.strokeStyle = `rgba(${col},${(0.08 + 0.4 * k) * f})`;
+      ctx.lineWidth = (0.12 + 0.4 * k) * f;
+      ctx.beginPath();
+      ctx.moveTo(this.trail[i - 1].x, this.trail[i - 1].y);
+      ctx.lineTo(this.trail[i].x, this.trail[i].y);
+      ctx.stroke();
+    }
+  }
+
+  /** Faint horizontal streaks rushing past at high speed (screen space, inside the view clip). */
+  private drawSpeedLines(g: Game, t: number, vw: number, vh: number) {
+    const sp = g.player.dead ? 0 : g.player.vx;
+    const k = Math.min(1, Math.max(0, (sp - 10.5) / 3.5));
+    if (k <= 0) return;
+    const { ctx } = this;
+    const n = Math.round(6 + 14 * k);
+    ctx.lineWidth = Math.max(1, this.dpr);
+    for (let i = 0; i < n; i++) {
+      const h1 = Math.sin(i * 127.1) * 43758.5453, h2 = Math.sin(i * 311.7) * 23421.631;
+      const fy = h1 - Math.floor(h1), fx = h2 - Math.floor(h2);
+      const len = vw * (0.05 + 0.08 * fy) * (0.5 + k);
+      const x = this.ox + vw - (((t * (1.6 + fy) + fx) % 1) * (vw + len));
+      const y = this.oy + vh * (0.06 + 0.88 * fy);
+      ctx.strokeStyle = `rgba(220,235,255,${0.05 + 0.13 * k})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + len, y);
+      ctx.stroke();
+    }
+  }
+
+  /** The BEST flag and the last run's end, as dashed lines down the whole view (world space). */
+  private drawMarkers(mk: NonNullable<Parameters<Renderer['draw']>[1]['markers']>) {
+    const { ctx } = this;
+    const line = (x: number, color: string) => {
+      if (x < this.camX - 2 || x > this.camX + this.vw + 2) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.07;
+      ctx.setLineDash([0.35, 0.3]);
+      ctx.beginPath();
+      ctx.moveTo(x, this.camY);
+      ctx.lineTo(x, this.camY + this.vh);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    const showLast = mk.last && (!mk.best || Math.abs(mk.last.m - mk.best.m) > 4);
+    if (showLast) line(mk.last!.x, 'rgba(255,120,120,0.35)');
+    if (mk.best) {
+      line(mk.best.x, 'rgba(255,227,107,0.5)');
+      // Pennant near the top of the view.
+      const x = mk.best.x, y = this.camY + 1.2;
+      ctx.fillStyle = COL.perfect;
+      ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x + 1.3, y + 0.45); ctx.lineTo(x, y + 0.9);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  /** Marker captions, in screen space so they stay crisp. */
+  private drawMarkerLabels(mk: NonNullable<Parameters<Renderer['draw']>[1]['markers']>) {
+    const { ctx } = this;
+    const s = this.dpr;
+    const fs = Math.max(11, Math.min(16, (this.canvas.height / s) * 0.024)) * s;
+    ctx.font = `800 ${fs}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    const label = (x: number, y: number, text: string, color: string) => {
+      const sx = this.ox + (x - this.camX) * this.sc, sy = this.oy + (y - this.camY) * this.sc;
+      if (sx < this.ox - 200 || sx > this.ox + this.ppt * C.VIEW_W) return;
+      ctx.lineWidth = fs * 0.25;
+      ctx.strokeStyle = 'rgba(5,7,12,0.8)';
+      ctx.strokeText(text, sx, sy);
+      ctx.fillStyle = color;
+      ctx.fillText(text, sx, sy);
+    };
+    if (mk.best) label(mk.best.x + 1.5, this.camY + 1.65, `BEST ${mk.best.m} m`, COL.perfect);
+    if (mk.last && (!mk.best || Math.abs(mk.last.m - mk.best.m) > 4)) {
+      label(mk.last.x + 0.3, this.camY + this.vh - 1.2, `✕ last run`, 'rgba(255,150,150,0.8)');
     }
   }
 
@@ -379,7 +540,7 @@ export class Renderer {
     ctx.lineJoin = 'round';
     for (const u of g.popups) {
       const t = u.life / u.max;
-      const x = this.ox + (u.x - this.camX) * this.ppt, y = this.oy + (u.y - this.camY) * this.ppt;
+      const x = this.ox + (u.x - this.camX) * this.sc, y = this.oy + (u.y - this.camY) * this.sc;
       const pop = 1 + 0.35 * Math.max(0, (t - 0.85) / 0.15); // quick pop on appearing
       ctx.font = `900 ${(u.big ? 1.6 : 1.15) * fs * pop}px system-ui, -apple-system, sans-serif`;
       ctx.globalAlpha = Math.min(1, t * 2.5);
@@ -404,9 +565,22 @@ export class Renderer {
     ctx.font = `800 ${fs * 1.5}px system-ui, -apple-system, sans-serif`;
     ctx.globalAlpha = 0.95;
     ctx.fillText(g.hudTitle, x, y);
+    // Momentum: the score multiplier next to the score, and a bar under it (gold when full).
+    const m = g.momentum, full = m > 0.97;
+    const tw = ctx.measureText(g.hudTitle).width;
+    ctx.font = `800 ${fs * 1.05}px system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = full ? COL.perfect : m > 0.02 ? COL.ring : 'rgba(238,243,255,0.45)';
+    ctx.fillText(`×${(1 + C.MOM_SCORE * m).toFixed(1)}`, x + tw + fs * 0.5, y + fs * 0.38);
+    const bw = fs * 7, bh = fs * 0.32, by = y + fs * 1.75;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(238,243,255,0.16)';
+    ctx.fillRect(x, by, bw, bh);
+    ctx.fillStyle = full ? COL.perfect : COL.ring;
+    ctx.fillRect(x, by, bw * m, bh);
+    ctx.fillStyle = COL.text;
     ctx.font = `600 ${fs}px system-ui, -apple-system, sans-serif`;
     ctx.globalAlpha = 0.7;
-    ctx.fillText(g.hudStats, x, y + fs * 1.75);
+    ctx.fillText(g.hudStats, x, y + fs * 2.35);
     if (g.level.hint && g.time < 9) {
       ctx.globalAlpha = Math.min(0.85, (9 - g.time) / 1.5);
       ctx.textAlign = 'center';

@@ -63,3 +63,28 @@ export const CHAIN_BONUS_PER_LINK = 5; // bonus metres per link beyond the first
 
 // Double jump flourish: a forward tuck (one full spin) over this long. Cosmetic only.
 export const FLIP_TIME = 0.5;
+
+// Momentum (0..1): earned by swinging well, lost by staying on the ground. It adds run speed and
+// multiplies the score (×1 at 0, ×(1 + MOM_SCORE) at 1). Gaps are built for the distance speed alone,
+// so a fast runner just clears them more easily (checked at +MOM_SPEED by tools/endless-check.js).
+export const MOM_SPEED = 2.5; // extra tiles/s at full momentum
+export const MOM_SCORE = 1; // full momentum doubles points
+export const MOM_CATCH = 0.06; // per rope catch
+export const MOM_PERFECT = 0.07; // extra per perfect release
+export const MOM_CHAIN = 0.03; // per extra link when landing a chain
+export const MOM_SPARK = 0.03; // per spark picked up
+export const MOM_GRACE = 0.5; // seconds on the ground before momentum starts draining
+export const MOM_DECAY = 0.11; // per second on the ground after the grace
+
+// Sparks: pickups along the arcs that only a great swing (or the optional high route) reaches.
+export const SPARK_RADIUS = 0.7; // pickup distance from the hero's centre
+export const SPARK_BONUS = 3; // bonus metres each (multiplied by momentum like everything else)
+
+// Perfect release flourish: a short slow-motion beat (real seconds) and a camera punch-in.
+export const SLOWMO_TIME = 0.22;
+export const SLOWMO_SCALE = 0.35;
+
+// Camera: zooms out as speed rises (view size × up to 1 + ZOOM_OUT at ZOOM_AT tiles/s and over).
+export const ZOOM_OUT = 0.14;
+export const ZOOM_FROM = 8.5;
+export const ZOOM_AT = 13;

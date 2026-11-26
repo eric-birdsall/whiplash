@@ -1,7 +1,8 @@
 # Whiplash — Plan
 
 An endless 2D grappling-hook runner. The hero never stops running; you jump, double jump, and fire a
-grapple at 60° to swing across gaps between floating platforms. One life: go as far as you can.
+grapple at 60° to swing across gaps between floating platforms. One life: go as far and as fast as you can.
+Swinging well builds **momentum**, which makes you faster and multiplies your score.
 
 **Audience:** teens and adults. A skill game: quick runs, instant retry, chase your best distance.
 
@@ -12,9 +13,9 @@ grapple at 60° to swing across gaps between floating platforms. One life: go as
 | Build | Vite + TypeScript, no runtime dependencies |
 | Rendering | Plain Canvas 2D, flat vector shapes (no art assets) |
 | Physics | Custom: tile-grid AABB collision + rope distance constraint, fixed 60 Hz step |
-| Audio | Synthesized with Web Audio (no files). SFX only, mute toggle. No music |
+| Audio | Synthesized with Web Audio (no files): SFX, plus a looping groove whose layers follow the swing chain. Sound and Music toggles |
 | World | Generated on the fly in `src/endless.ts`; the tile grid grows to the right as you run |
-| Save | `localStorage` `whiplash.endless.best` (best score: distance + chain bonus metres) |
+| Save | `localStorage` `whiplash.endless.bestScore` (best score), `…bestDist` (farthest metres, seeded from the old `…best`), `…lastDeath` (where the last run ended), `whiplash.music` |
 | Hosting | GitHub Pages via Actions workflow; Vite `base: './'`; installable PWA with offline play |
 
 ## Controls
@@ -32,7 +33,9 @@ perfect release, a strong one on death. Using a controller swaps the controls li
 
 ## Moves
 
-- **Run:** always to the right. Speed ramps from 7 to 10.5 tiles/s over the first 1,600 m.
+- **Run:** always to the right. The base speed ramps from 7 to 10.5 tiles/s over the first 1,600 m; momentum adds up
+  to 2.5 more (so up to 13). Gaps are built for the base speed only, so momentum only ever makes them easier to clear
+  (at +2.5 every obstacle stays beatable; some grapple gaps even become double-jumpable, which earns no momentum).
 - **Jump:** ≈2.4 tiles high, ≈5.5 tiles long at base speed (double jump adds ≈2.25 more height), with coyote time (0.1 s) and an input buffer (0.12 s).
 - **Double jump:** one extra jump in the air, refreshed on landing or when the grapple catches. The hero does a front tuck (one
   forward spin over 0.5 s; cosmetic, cancelled by landing or firing the grapple).
@@ -54,6 +57,14 @@ perfect release, a strong one on death. Using a controller swaps the controls li
 - **Swing chains:** every rope catch and every perfect release since you last touched the ground is a link
   (×2, ×3… pops up from the second link). Landing with 2+ links grows the landing burst (+30% per extra
   link, up to ×2) and adds 5 bonus metres per extra link to the score. A single catch + perfect release is ×2.
+- **Momentum** (0–1, `MOM_*` in `src/config.ts`): +0.06 per rope catch, +0.07 more for a perfect release, +0.03 per extra
+  link when landing a chain, +0.03 per spark. It drains 0.11/s while you stay on the ground for more than 0.5 s, never in the air.
+  It adds run speed and multiplies points: ×1.0 at empty, ×2.0 at full. The HUD shows the multiplier beside the score and a bar
+  under it (gold when full); from 25% a trail streams behind the hero, cyan turning gold near full.
+- **Score:** every metre, chain bonus metre and spark is worth the multiplier at the moment you earn it.
+- **Sparks:** gold pickups (+3 bonus metres, a little momentum, a chime that climbs a pentatonic ladder per spark in a row).
+  45% of rings and beams (after ~30 m) carry an arc of three, up and ahead of the anchor (`SPARK_ARC` in `src/endless.ts`),
+  where only a late, high release flies; they move with their anchor. About 1 in 10 swings that clear the gap picks one up.
 - **Fail:** falling off the bottom, or being pinned against a wall for 0.45 s, ends the run (no softlocks).
 
 ## The course
@@ -79,9 +90,15 @@ Each chunk is a floating stone platform (2 tiles thick, open air below) followed
 - Gaps scale with speed; ledges move up to 1 up or 3 down.
 - The first gap is always a beam (~25 m in). Beams are the most common obstacle; rings appear from ~45 m.
   Platforms shorten as difficulty rises (full difficulty at 1,500 m). No three identical obstacles in a row.
+- **High route:** 40% of platforms 8+ tiles long (after ~75 m) get a still ring high over them (8.5 tiles up) with a spark
+  arc past it. Walking under it is safe; catching it straight out of the last obstacle keeps a chain going, and swinging
+  off it flies the sparks. The checker confirms it never makes the next obstacle harder (rings beat wood for aim assist, so
+  it was worth checking).
 - The camera leads 10 tiles so the next landing is on screen.
 
-**Checker (dev only):** `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
+**Checker (dev only):** `strip()` also takes `genSpeed` (build the gap for one speed, run at another: momentum),
+`sparks` and `plat`; `sparkReach(kind, { speed, high })` counts swings that collect sparks and still clear.
+ `tools/endless-check.js` builds each obstacle at the ends of its ranges, at base
 and top speed, and measures the timing window (frames where some jump / double jump / grapple clears it).
 Beams are checked at their narrowest and widest. Every variant is beatable; the tightest is 30 frames (~0.5 s, an
 11-tile double-jump gap at top speed). Still rings 36+ frames and beams 52+ at top speed. `checkMoving()` checks rings,
@@ -95,16 +112,27 @@ The full moving sweep is too slow for the browser console; bundle the checker wi
 ## Look
 
 Flat vector art with a color language: wood (warm brown, bright underside lip) = grabbable;
-dark stone = platforms; cyan rings = anchors. The hero is an original commando with a grapple gauntlet;
+dark stone = platforms; cyan rings = anchors; gold = sparks and perfect releases. The hero is an original commando with a grapple gauntlet;
 the hook head is an arcade-crane claw that opens in flight and clamps shut when it catches.
+
+## Feel
+
+- **Perfect release:** 0.22 s of slow motion (×0.35) and a quick camera punch-in.
+- **Zoom:** the view widens with run speed, from 32 × 18 tiles at 8.5 tiles/s to ×1.14 at 13.
+- **Speed lines** stream past above 10.5 tiles/s.
+- **Course markers:** a gold dashed line and **BEST n m** pennant at your farthest distance, and a faint red line at where the
+  last run ended (hidden when within 4 m of the best). Passing the best pops **NEW BEST!** with a fanfare.
+- **Music:** A minor (Am F C G), 128 BPM, scheduled ahead on the audio clock. The base layer (kick and bass) plays during a run.
+  Each chain link fades in another layer (1: hats and snare, 2: arpeggio, 3: lead), and they ease out when you land. It stops
+  on Pause and on death.
 
 ## Screen
 
 Landscape, fixed 32 × 18-tile view (zoomed out), letterboxed. The HUD is sized from the screen, not the tiles. Title: **Run**, best distance, controls, and in the
-top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Menu. Resuming shows the frozen, unblurred run under a 3-2-1 countdown (a blip per number) before play continues.
+top-left corner "Updated <build time>" plus **Reload latest**. Pause: Resume, Restart, Sound, Music, Menu. Resuming shows the frozen, unblurred run under a 3-2-1 countdown (a blip per number) before play continues.
 Both title and pause have a **Grapple angle − / +** playtest option (20–75° in 2.5° steps, default 60°, saved
 in `localStorage` `whiplash.aimAngle`; a change from Pause applies to the current run). The checker always uses the default.
-Run over: distance (and new best), Run again, Menu.
+Run over: score (and new best), then distance, perfect releases and sparks; Run again, Menu. The title shows best score and farthest distance.
 
 ## Install & offline (PWA)
 
@@ -128,11 +156,11 @@ src/
   game.ts        simulation: running, jumps, grapple, rope, fail checks
   physics.ts     AABB vs tile grid, raycasts
   level.ts       tile types, world data, moving rings and beams
-  render.ts      camera, tiles, beams, rings, motion tracks, aim guide, rope + claw, HUD, touch zones
+  render.ts      camera + zoom, tiles, beams, rings, sparks, markers, aim guide, rope + claw, trail, speed lines, HUD, touch zones
   hero.ts        the commando: pose and drawing
   claw.ts        the arcade-crane claw
   input.ts       keyboard / mouse / touch / controller → InputState
-  audio.ts       synthesized sound effects
+  audio.ts       synthesized sound effects and layered music
   config.ts      every tuning constant
 tools/
   endless-check.js  obstacle checker (dev only)
@@ -151,5 +179,5 @@ GitHub Pages: pushing to `main` builds and deploys via `.github/workflows/deploy
 
 ## Later
 
-Music · spikes or hazards on platforms · enemies to yank · pickups and score multipliers · gamepad ·
+Daily seeded run · small goals (×5 chain, 3 perfects in a row) · new zones every ~500 m · spikes or hazards on platforms · enemies to yank · pickups and score multipliers · gamepad ·
 leaderboards.

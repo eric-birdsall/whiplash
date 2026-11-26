@@ -22,6 +22,8 @@ const ANGLE_KEY = 'whiplash.aimAngle';
 const ANGLE_DEFAULT = (C.AUTO_AIM_ANGLE * 180) / Math.PI;
 const ANGLE_MIN = 20, ANGLE_MAX = 75, ANGLE_STEP = 2.5;
 let aimDeg = Number(localStorage.getItem(ANGLE_KEY)) || ANGLE_DEFAULT;
+/** Real seconds of slow motion left (a perfect release). */
+let slowmo = 0;
 /** The current run. A fresh one sits behind the title screen as a backdrop. */
 let run = newRun();
 
@@ -39,12 +41,13 @@ function setAimDeg(d: number) {
 
 function newRun(): EndlessRun {
   const r = new EndlessRun((s) => {
-    audio.play(s);
+    audio.play(s, s === 'spark' ? r.game.sparkStreak : 0);
     if (s === 'attach') input.rumble(0, 0.35, 60);
-    else if (s === 'perfect') input.rumble(0.2, 0.5, 90);
+    else if (s === 'perfect') { input.rumble(0.2, 0.5, 90); slowmo = C.SLOWMO_TIME; renderer.punch(); }
     else if (s === 'death') input.rumble(0.8, 0.6, 280);
   });
   r.game.aimAngle = (aimDeg * Math.PI) / 180;
+  slowmo = 0;
   renderer.resize();
   renderer.snapCamera(r.game);
   return r;
@@ -66,8 +69,10 @@ function show(s: Screen) {
   if (s === 'countdown') { countdownEnd = performance.now() + RESUME_COUNT * 1000; countdownShown = -1; }
   // Leaving the countdown keeps what's held, so the player can already be holding grapple when play resumes.
   if (!(from === 'countdown' && s === 'play')) input.releaseAll();
-  if (s === 'pause') $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`;
-  if (s === 'title') $('title-best').textContent = run.best > 0 ? `Best: ${run.best} m` : '';
+  if (s === 'pause') { $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; $('music-btn').textContent = `Music: ${audio.musicOn ? 'on' : 'off'}`; }
+  if (s === 'title') $('title-best').textContent = run.best > 0 ? `Best: ${run.best}  ·  farthest ${run.bestDist} m` : '';
+  // The groove plays only while running (and during the resume countdown, so it's already going).
+  if (s === 'play' || s === 'countdown') audio.startMusic(); else audio.stopMusic();
 }
 
 let countdownEnd = 0;
@@ -96,9 +101,12 @@ function startRun() {
 }
 
 function onRunOver() {
-  const d = run.score;
+  const d = run.score, dist = run.distance, g = run.game;
+  const farther = dist > run.bestDist && run.bestDist > 0;
   const best = run.finish();
-  $('over-stats').textContent = best ? `${d} m   — new best!` : `${d} m   (best ${run.best} m)`;
+  $('over-stats').textContent = best ? `${d}   — new best!` : `${d}   (best ${run.best})`;
+  const bits = [`${dist} m${farther ? ' (farthest yet)' : ''}`, `${g.perfects} perfect`, `${g.sparks} spark${g.sparks === 1 ? '' : 's'}`];
+  $('over-detail').textContent = bits.join('  ·  ');
   show('over');
 }
 
@@ -115,6 +123,7 @@ document.addEventListener('click', (e) => {
     case 'angle-down': setAimDeg(aimDeg - ANGLE_STEP); break;
     case 'angle-up': setAimDeg(aimDeg + ANGLE_STEP); break;
     case 'mute': audio.setMuted(!audio.muted); $('mute-btn').textContent = `Sound: ${audio.muted ? 'off' : 'on'}`; break;
+    case 'music': audio.setMusicOn(!audio.musicOn); $('music-btn').textContent = `Music: ${audio.musicOn ? 'on' : 'off'}`; break;
   }
 });
 // ---------- Controller on menus ----------
@@ -224,7 +233,9 @@ function frame(now: number) {
     if (st.pause) show('pause');
     else if (st.restart) startRun();
     else {
-      acc += dt;
+      // A perfect release slows time for a moment.
+      acc += dt * (slowmo > 0 ? C.SLOWMO_SCALE : 1);
+      slowmo = Math.max(0, slowmo - dt);
       let pressed = st.hookPressed;
       let jump = st.jumpPressed;
       stepped = false;
@@ -236,8 +247,11 @@ function frame(now: number) {
         pressed = jump = false;
         acc -= C.STEP;
       }
+      // More of the groove the longer the chain; back to the base beat on landing.
+      audio.setMusicLevel(Math.min(3, game.links));
       if (game.player.dead) {
         screen = 'dying'; // let the burst play, then show the score
+        audio.stopMusic();
         setTimeout(() => { if (screen === 'dying') onRunOver(); }, 900);
       }
     }
@@ -262,6 +276,10 @@ function frame(now: number) {
     aim: screen === 'play' ? run.game.assistAim() : null,
     touch: input.touchMode && !input.padMode && (screen === 'play' || screen === 'dying' || screen === 'countdown'),
     zones: input.heldZones(),
+    markers: {
+      best: run.bestDist > 0 ? { x: run.xAt(run.bestDist), m: run.bestDist } : undefined,
+      last: run.lastDeath > 0 ? { x: run.xAt(run.lastDeath), m: run.lastDeath } : undefined,
+    },
   });
   restore();
   input.clearEdges(stepped || screen !== 'play');

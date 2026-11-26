@@ -8,27 +8,29 @@ const DT = 1 / 60;
 
 /** A test strip: runway, one forced obstacle, landing runway. Returns { game, gapStart, gapEnd }. */
 // move: motion size (0 = still, 1 = full size, as at top difficulty). phase: where in its motion each
-// ring / beam starts (radians). vertical: force bobbing/sinking (true) or sliding (false).
-export function strip(kind, { gap, rise, beamLen, speed = C.RUN_SPEED, seed = 1, move = 0, phase = 0, vertical } = {}) {
+// ring / beam starts (radians). vertical: force bobbing/sinking (true) or sliding (false). genSpeed: the speed
+// the gap is built for (default: speed); running faster than that is what momentum does. sparks: force spark
+// arcs and the high route on or off. plat: takeoff platform length (the high route needs 8+).
+export function strip(kind, { gap, rise, beamLen, speed = C.RUN_SPEED, genSpeed, seed = 1, move = 0, phase = 0, vertical, sparks = false, plat = 6 } = {}) {
   const gen = new EndlessGen(seed);
   gen.gy = 14;
   const cols = [];
   for (let i = 0; i < 14; i++) cols.push(gen.slab(gen.gy));
   const x0 = cols.length;
-  const ch = gen.next(speed, 0, kind, { gap, rise, beamLen, plat: 6, move, phase, vertical });
+  const ch = gen.next(genSpeed ?? speed, 0, kind, { gap, rise, beamLen, plat, move, phase, vertical, sparks });
   cols.push(...ch.cols);
-  const { rings, beams } = place(ch, x0);
+  const { rings, beams, sparks: sparkList } = place(ch, x0);
   for (let i = 0; i < 24; i++) cols.push(gen.slab(gen.gy));
   const w = cols.length;
   const tiles = new Uint8Array(w * ENDLESS_H);
   for (let x = 0; x < w; x++) for (let y = 0; y < ENDLESS_H; y++) tiles[y * w + x] = cols[x][y];
   const level = { name: 'check', w, h: ENDLESS_H, tiles, start: { x: 3, y: 14 }, rings, beams };
   const mk = () => {
-    const g = new Game({ ...level, rings: rings.map((r) => ({ ...r })), beams: beams.map((b) => ({ ...b })) });
+    const g = new Game({ ...level, rings: rings.map((r) => ({ ...r })), beams: beams.map((b) => ({ ...b })), sparks: sparkList.map((k) => ({ ...k })) });
     g.runSpeed = speed;
     return g;
   };
-  const gapStart = x0 + 6, gapEnd = gapStart + ch.gap;
+  const gapStart = x0 + plat, gapEnd = gapStart + ch.gap;
   return { mk, gapStart, gapEnd, gap: ch.gap, rise: ch.rise };
 }
 
@@ -95,6 +97,26 @@ export function window(kind, opts) {
   for (const w of good) { const r = ranges[ranges.length - 1]; if (r && w === r[1] + 1) r[1] = w; else ranges.push([w, w]); }
   const best = ranges.reduce((m, r) => Math.max(m, r[1] - r[0] + 1), 0);
   return { kind, gap: s.gap, rise: s.rise, window: best, how };
+}
+
+/**
+ * Sparks: how many swings (wait w frames, hold h, then let go) pick up at least one / all of an obstacle's
+ * spark arc and still clear the gap. high: put the high-route ring on a long platform before it instead.
+ */
+export function sparkReach(kind, { speed = C.RUN_SPEED, high = false, ...opts } = {}) {
+  const s = strip(kind, { speed, sparks: true, plat: high ? 9 : 6, ...opts });
+  const total = s.mk().level.sparks.length;
+  let swings = 0, some = 0, all = 0;
+  for (let w = 0; w <= 160; w++) for (let h = 6; h <= 80; h += 2) {
+    const g = s.mk();
+    if (!play(g, [[w, false, false]]) || g.player.x > s.gapStart + 2) continue;
+    if (!play(g, [[h, true, false]]) || g.links === 0) continue;
+    swings++;
+    if (!cleared(g, s.gapEnd)) continue;
+    if (g.sparks > 0) some++;
+    if (g.sparks >= total) all++;
+  }
+  return { kind, speed, high, sparks: total, swings, some, all };
 }
 
 /** Every obstacle at the ends of its ranges, at base and top speed. */

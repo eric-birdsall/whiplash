@@ -1,5 +1,5 @@
 import * as C from './config';
-import { Beam, Level, Ring, Tile, Vec, motionOffset } from './level';
+import { Beam, Level, Ring, Spark, Tile, Vec, motionOffset } from './level';
 import { Box, Grid, boxHitsGrid, moveAxis, overlaps, rayBox, raycastGrid, rayCircle } from './physics';
 
 export const MAT_WOOD = 1;
@@ -25,7 +25,7 @@ export interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; grav: number;
 }
 
-export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain';
+export type Sfx = 'fire' | 'attach' | 'clank' | 'miss' | 'death' | 'jump' | 'perfect' | 'chain' | 'spark' | 'best';
 
 /** A locked spot on a mover: (ox, oy) from its x, y (a ring's centre, or a point on a beam's underside). */
 export type AimTarget = { on: Ring | Beam; ox: number; oy: number };
@@ -77,10 +77,20 @@ export class Game implements Grid {
   bonus = 0;
   /** Perfect releases this run (for tools and stats). */
   perfects = 0;
+  /** Play a sound through this run's sound hook (for the run controller). */
+  sfxOut: (s: Sfx) => void;
+  /** Momentum 0..1: earned by swinging well, drained by time on the ground. Adds speed and multiplies score. */
+  momentum = 0;
+  /** Seconds since last leaving the ground (0 while airborne). */
+  private groundTime = 0;
+  /** Sparks picked up this run, and how many in a row since last touching the ground (raises the chime). */
+  sparks = 0;
+  sparkStreak = 0;
   /** Seconds into the double-jump front tuck, or -1 when not flipping (cosmetic). */
   flipT = -1;
 
   constructor(public level: Level, private sfx: (s: Sfx) => void = () => {}) {
+    this.sfxOut = sfx;
     this.w = level.w;
     this.h = level.h;
     this.player = {
@@ -88,6 +98,7 @@ export class Game implements Grid {
       vx: 0, vy: 0, grounded: false, facing: 1, dead: false,
     };
     this.level.beams ??= [];
+    this.level.sparks ??= [];
     this.updateMovers(true);
   }
 
@@ -95,7 +106,7 @@ export class Game implements Grid {
    * Append columns on the right. Each column is h tile values, top to bottom.
    * Rings far behind the player are dropped so hook raycasts stay cheap.
    */
-  appendColumns(cols: Uint8Array[], rings: Ring[], beams: Beam[] = []) {
+  appendColumns(cols: Uint8Array[], rings: Ring[], beams: Beam[] = [], sparks: Spark[] = []) {
     const oldW = this.w, h = this.h, nw = oldW + cols.length;
     const t = new Uint8Array(nw * h);
     for (let y = 0; y < h; y++) {
@@ -107,6 +118,7 @@ export class Game implements Grid {
     const cutoff = this.player.x - 40;
     this.level.rings = this.level.rings.filter((r) => r.x > cutoff).concat(rings);
     this.level.beams = this.level.beams.filter((b) => b.x + b.w > cutoff).concat(beams);
+    this.level.sparks = this.level.sparks!.filter((k) => k.x > cutoff && !k.taken).concat(sparks);
     this.updateMovers(true);
   }
 
@@ -124,6 +136,10 @@ export class Game implements Grid {
     for (const r of this.level.rings) {
       const o = motionOffset(r.m, t);
       r.x = r.bx + o.x; r.y = r.by + o.y;
+    }
+    for (const k of this.level.sparks!) {
+      const o = motionOffset(k.m, t);
+      k.x = k.bx + o.x; k.y = k.by + o.y;
     }
     const p = this.player;
     for (const b of this.level.beams) {
@@ -228,8 +244,27 @@ export class Game implements Grid {
       this.flipT += dt;
       if (this.flipT >= C.FLIP_TIME || p.grounded || this.hook.kind !== 'idle') this.flipT = -1;
     }
+    this.collectSparks();
     if (p.y > this.h + 1) this.kill('fell');
     this.checkPinned(dt);
+  }
+
+  private addMomentum(n: number) { this.momentum = Math.max(0, Math.min(1, this.momentum + n)); }
+
+  /** Pick up any spark the hero touches: bonus metres, a little momentum, and a chime that climbs per streak. */
+  private collectSparks() {
+    const c = this.center();
+    for (const k of this.level.sparks!) {
+      if (k.taken || Math.abs(k.x - c.x) > C.SPARK_RADIUS + 0.5) continue;
+      if (Math.hypot(k.x - c.x, k.y - c.y) > C.SPARK_RADIUS) continue;
+      k.taken = true;
+      this.sparks++;
+      this.sparkStreak++;
+      this.bonus += C.SPARK_BONUS;
+      this.addMomentum(C.MOM_SPARK);
+      this.burst(k.x, k.y, 8, '#ffe36b', 4, 2);
+      this.sfx('spark');
+    }
   }
 
   /**
@@ -340,6 +375,7 @@ export class Game implements Grid {
       const c = this.center();
       this.burst(c.x, c.y, 14, '#ffe36b', 6, 4);
       this.sfx('perfect');
+      this.addMomentum(C.MOM_PERFECT);
       this.addLink('PERFECT');
     }
   }
@@ -356,12 +392,13 @@ export class Game implements Grid {
   /** One more chain link; shows the count from ×2 up. */
   private addLink(label: string | null) {
     this.links++;
+    this.addMomentum(C.MOM_CATCH);
     const c = this.center();
     const text = this.links >= 2 ? (label ? `${label} ×${this.links}` : `×${this.links}`) : label;
     if (text) this.popup(text, c.x, c.y - 1.4, label ? '#ffe36b' : '#7df0ff', false);
   }
 
-  private popup(text: string, x: number, y: number, color: string, big: boolean) {
+  popup(text: string, x: number, y: number, color: string, big: boolean) {
     this.popups.push({ text, x, y, life: 1, max: 1, color, big });
   }
 
@@ -477,13 +514,17 @@ export class Game implements Grid {
       p.vx = Math.max(p.vx, this.runSpeed + this.landBoost);
       this.burst(p.x, p.y + p.h, 8 + extra * 6, '#7df0ff', 3 + extra, 6);
       if (extra > 0) {
+        this.addMomentum(C.MOM_CHAIN * extra);
         const m = C.CHAIN_BONUS_PER_LINK * extra;
         this.bonus += m;
         this.popup(`+${m} m`, p.x + p.w / 2, p.y - 1, '#ffe36b', true);
         this.sfx('chain');
       }
     }
-    if (p.grounded && !anchored) { this.swung = false; this.links = 0; }
+    if (p.grounded && !anchored) { this.swung = false; this.links = 0; this.sparkStreak = 0; }
+    // Momentum drains while you stay on the ground (after a short grace), never in the air.
+    this.groundTime = p.grounded ? this.groundTime + dt : 0;
+    if (this.groundTime > C.MOM_GRACE) this.addMomentum(-C.MOM_DECAY * dt);
   }
 
   /** Pinned against a wall you can't get past → the run ends (no softlocks). */
